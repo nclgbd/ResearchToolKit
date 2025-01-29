@@ -245,7 +245,9 @@ class ModelConfiguration:
 
 @dataclass
 class VQAConfiguration(BaseConfiguration):
-    datasets: DatasetConfiguration = field(default_factory=ImageDatasetConfiguration)
+    datasets: ImageDatasetConfiguration = field(
+        default_factory=ImageDatasetConfiguration
+    )
     models: ModelConfiguration = field(default_factory=ModelConfiguration)
 
 

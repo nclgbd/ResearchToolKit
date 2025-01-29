@@ -1,5 +1,9 @@
 """Custom transforms for formatted datasets."""
 
+import PIL.JpegImagePlugin
+import numpy as np
+import PIL
+
 # torch
 from torchvision.transforms import Lambda
 import torch
@@ -24,6 +28,8 @@ def GrayscaleToRGB():
 
 
 def __apply_xrv_normalize(x, maxval=255.0):
+    if isinstance(x, PIL.JpegImagePlugin.JpegImageFile):
+        x = np.array(x.convert("RGB")).transpose(2, 0, 1)
     return xrv.datasets.normalize(x, maxval)
 
 

@@ -82,7 +82,9 @@ def download_model_weights(
     return location
 
 
-def create_clip_model(cfg: ImageClassificationConfiguration, **kwargs):
+def create_clip_model(
+    cfg: ImageClassificationConfiguration, return_processors=False, **kwargs
+):
     dataset_cfg = cfg.datasets
     caption_column = dataset_cfg.caption_column
     image_column = dataset_cfg.image_column
@@ -111,13 +113,24 @@ def create_clip_model(cfg: ImageClassificationConfiguration, **kwargs):
         examples["pixel_values"] = [val_image_processor(image) for image in images]
         return examples
 
-    return (
-        model,
-        tokenizer,
-        tokenize_captions,
-        train_transform_images,
-        val_transform_images,
-    )
+    if return_processors:
+        return (
+            model,
+            tokenizer,
+            tokenize_captions,
+            train_transform_images,
+            val_transform_images,
+            train_image_processor,
+            val_image_processor,
+        )
+    else:
+        return (
+            model,
+            tokenizer,
+            tokenize_captions,
+            train_transform_images,
+            val_transform_images,
+        )
 
 
 def instantiate_model(
@@ -140,11 +153,11 @@ def instantiate_model(
     if "clip" in model_cfg.get("model_name", None):
         return create_clip_model(cfg, **kwargs)
 
-    model: nn.Module = hydra_instantiate(cfg=model_cfg.model, **kwargs)
+    model: nn.Module = hydra_instantiate(cfg=model_cfg.model)
 
-    if cfg.models.get("last_layer", False):
+    if model_cfg.get("last_layer", False):
         model.op_threshs = None  # prevent pre-trained model calibration
-        model.classifier = hydra_instantiate(cfg.models.last_layer)
+        model.classifier = hydra_instantiate(model_cfg.last_layer)
 
     pretrained_weights = model_cfg.get("pretrained_weights", None)
     if pretrained_weights is not None:
@@ -167,11 +180,11 @@ def instantiate_model(
         else:
             model.load_state_dict(torch.load(model_path))
 
-    if cfg.job.get("use_multi_gpu", False):
-        console.log("Using multi-GPU...")
-        device_ids = kwargs.get("device_ids", [device])
-        model = DDP(model, device_ids=device_ids, output_device=0)
-        return model
+    # if cfg.job.get("use_multi_gpu", False):
+    #     console.log("Using multi-GPU...")
+    #     device_ids = kwargs.get("device_ids", [device])
+    #     model = DDP(model, device_ids=device_ids, output_device=0)
+    #     return model
 
     return model.to(device)
 
