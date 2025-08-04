@@ -85,6 +85,8 @@ def download_model_weights(
 def create_clip_model(
     cfg: ImageClassificationConfiguration, return_processors=False, **kwargs
 ):
+    from transformers import BertTokenizerFast
+
     dataset_cfg = cfg.datasets
     caption_column = dataset_cfg.caption_column
     image_column = dataset_cfg.image_column
@@ -95,21 +97,27 @@ def create_clip_model(
         open_clip.create_model_and_transforms(model_path, pretrained=pretrained)
     )
     model.eval()
-    tokenizer = open_clip.get_tokenizer(model_path, context_length=model.context_length)
+    tokenizer: open_clip.tokenizer.HFTokenizer = open_clip.get_tokenizer(
+        model_path, context_length=model.context_length
+    )
 
-    def tokenize_captions(examples):
+    def tokenize_captions(examples: dict):
         captions = list(examples[caption_column])
         text = tokenizer(captions)
         examples["text"] = text
         return examples
 
-    def train_transform_images(examples):
+    def train_transform_images(examples: dict):
         images = [Image.open(image_file) for image_file in examples[image_column]]
         examples["pixel_values"] = [train_image_processor(image) for image in images]
         return examples
 
-    def val_transform_images(examples):
-        images = [Image.open(image_file) for image_file in examples[image_column]]
+    def val_transform_images(examples: dict):
+        scan_data = dataset_cfg.scan_data
+        images = [
+            Image.open(os.path.join(scan_data, image_file))
+            for image_file in examples[image_column]
+        ]
         examples["pixel_values"] = [val_image_processor(image) for image in images]
         return examples
 
