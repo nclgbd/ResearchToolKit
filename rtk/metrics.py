@@ -36,16 +36,17 @@ def generate_classification_report(
             y_true, y_pred, target_names=target_names, zero_division=0.0
         )
     )
+    summary_dict = {
+        f"{split}_f1-score": round(cr["macro avg"]["f1-score"], 4),
+        # "roc auc": round(roc_auc_score(y_true, y_pred), 4),
+        f"{split}_sensitivity": round(cr["Pneumonia"]["recall"], 4),
+        f"{split}_specificity": round(cr["No Pneumonia"]["recall"], 4),
+        f"{split}_recall": round(cr["macro avg"]["recall"], 4),
+        f"{split}_precision": round(cr["macro avg"]["precision"], 4),
+        f"{split}_accuracy": round(cr["accuracy"], 4),
+    }
     summary = pd.DataFrame(
-        {
-            f"{split}_f1-score": round(cr["macro avg"]["f1-score"], 4),
-            # "roc auc": round(roc_auc_score(y_true, y_pred), 4),
-            f"{split}_sensitivity": round(cr["Pneumonia"]["recall"], 4),
-            f"{split}_specificity": round(cr["No Pneumonia"]["recall"], 4),
-            f"{split}_recall": round(cr["macro avg"]["recall"], 4),
-            f"{split}_precision": round(cr["macro avg"]["precision"], 4),
-            f"{split}_accuracy": round(cr["accuracy"], 4),
-        },
+        summary_dict,
         index=[model_name],
     )
     console.print(summary)
@@ -78,3 +79,5 @@ def generate_classification_report(
         mlflow.log_artifact(
             cfm_path,
         )
+
+    return summary_dict
