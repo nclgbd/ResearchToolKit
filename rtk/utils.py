@@ -3,32 +3,53 @@ General utility functions. These are not specific to any deep learning framework
 """
 
 # imports
+import hydra
 import logging
 import os
+import textwrap
 import yaml
-import hydra
-from copy import deepcopy
 from argparse import Namespace
 from colorlog import ColoredFormatter
 from logging import Logger
 from omegaconf import DictConfig, OmegaConf
 from rich.console import Console
 from rich.logging import RichHandler
+from rich.markdown import Markdown
+
 
 __all__ = [
     "_console",
-    "_logger",
+    # "_logger",
     "COLOR_LOGGER_FORMAT",
     "get_console",
     "get_logger",
-    "login",
-    "repl",
 ]
 
-LOG_TIME_FORMAT = "[%X]"
+LOGGING_DIR = "logs"
+LOG_TIME_FORMAT = "[%X]".strip()
 COLOR_LOGGER_FORMAT: logging.Formatter = ColoredFormatter(
-    fmt="%(name)s: %(message)s", datefmt=LOG_TIME_FORMAT
+    fmt="%(name)s - %(message)s".strip(),
+    # datefmt=LOG_TIME_FORMAT,
+    reset=False,
 )
+
+
+def intro(args: DictConfig, console: Console = Console()):
+    console.clear()
+    console.print(Markdown("# SigLIP Training"))
+    assert os.environ.get(
+        "HF_TOKEN", ""
+    ), "Please set the `HF_TOKEN` environment variable."
+
+    config_str = OmegaConf.to_yaml(args, resolve=True)
+    console.print(Markdown("## Configuration\n\n"))
+    config_str = textwrap.dedent(
+        f"""
+        ```yaml
+{config_str}
+        """
+    ).strip()
+    console.print(Markdown(config_str))
 
 
 def get_console(**kwargs) -> Console:
@@ -40,13 +61,21 @@ def get_console(**kwargs) -> Console:
 
     """
 
+    # log_file = kwargs.get("file", None)
+    # if log_file:
+    #     file_io = open(log_file, "a")
+    #     kwargs["file"] = file_io
     return kwargs.get("console", Console(record=True, **kwargs))
 
 
 _console = get_console()
 
 
-def get_logger(name: str = None, level: int = logging.INFO):
+def get_logger(
+    name: str = None,
+    level: int = logging.INFO,
+    console: Console = Console(),
+) -> Logger:
     """
     Function to get a logger with a `RichHandler`. Sets up the logger with a custom format and a `StreamHandler`.
 
@@ -60,11 +89,20 @@ def get_logger(name: str = None, level: int = logging.INFO):
 
     logger: Logger = logging.getLogger(name)
     logger.setLevel(level=level)
+
+    # File settings
+    # curr_dir = os.getcwd()
+    # os.makedirs("logs", exist_ok=True)
+    # file_handler = logging.FileHandler(f"logs/{name}.log")
+    # file_handler.setFormatter(COLOR_LOGGER_FORMAT)
+    # logger.addHandler(file_handler)
+
+    # Color settings
     rich_handler = RichHandler(
-        rich_tracebacks=True,
+        # rich_tracebacks=True,
+        # console=console,
         level=level,
         log_time_format=LOG_TIME_FORMAT,
-        console=_console,
     )
     rich_handler.setFormatter(COLOR_LOGGER_FORMAT)
     logger.addHandler(rich_handler)
@@ -83,10 +121,10 @@ def hydra_instantiate(cfg: DictConfig, **kwargs):
     ## Returns:
     * `Any`: The instantiated class.
     """
-    target_class_name = cfg["_target_"].split(".")[-1]
-    _logger.debug(
-        "Instantiating object '{}' from configuration".format(target_class_name)
-    )
+    # target_class_name = cfg["_target_"].split(".")[-1]
+    # _logger.debug(
+    #     "Instantiating object '{}' from configuration".format(target_class_name)
+    # )
     return hydra.utils.instantiate(cfg, **kwargs)
 
 
@@ -118,4 +156,4 @@ def strip_target(_dict: dict, lower=False):
     return target_name
 
 
-_logger = get_logger(__name__)
+# _logger = get_logger(__name__)

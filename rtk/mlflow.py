@@ -8,7 +8,7 @@ from omegaconf import DictConfig
 import mlflow
 
 # rtk
-from rtk.utils import get_logger, strip_target, login, _console
+from rtk.utils import get_logger, strip_target, _console
 from rtk.config import *
 
 logger = get_logger(__name__)
@@ -27,7 +27,7 @@ def _determine_model_name(cfg: ImageClassificationConfiguration, **kwargs):
 def prepare_mlflow_environment(cfg: BaseConfiguration, **kwargs):
     """Manually set the 'MLFLOW_EXPERIMENT_NAME' and 'MLFLOW_TRACKING_URI'"""
     # set tracking uri
-    ws = login()
+    ws = login()  # type: ignore
     tracking_uri = kwargs.get("tracking_uri", ws.get_mlflow_tracking_uri())
     logger.debug(f"MLflow tracking URI:\t'{tracking_uri}'")
     os.environ["MLFLOW_TRACKING_URI"] = tracking_uri
@@ -150,7 +150,7 @@ def prepare_mlflow(cfg: BaseConfiguration, return_tracking_uri=False):
     console.log("Preparing MLflow run...")
     mlflow_cfg = cfg.mlflow
     logger.debug("Using AzureML for experiment tracking...")
-    ws = login()
+    ws = login()  # type: ignore
     tracking_uri = ws.get_mlflow_tracking_uri()
 
     mlflow.set_tracking_uri(tracking_uri)
