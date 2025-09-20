@@ -13,9 +13,6 @@ from omegaconf import OmegaConf
 from random import randint
 from rich import inspect
 
-import datasets
-import transformers
-
 # sklearn
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder, MultiLabelBinarizer
@@ -24,14 +21,23 @@ from sklearn.preprocessing import LabelEncoder, MultiLabelBinarizer
 import torch
 from torch.utils.data import DataLoader
 from torchvision.io import read_image
+from torchvision.transforms import (
+    Compose,
+    Normalize,
+    RandomAdjustSharpness,
+    RandomRotation,
+    Resize,
+    ToTensor,
+)
 
 # :huggingface:
 from transformers import AutoTokenizer
+from datasets import Dataset, DatasetDict
 
 # monai
 import monai
 import monai.transforms as monai_transforms
-from monai.data import ImageDataset, CacheDataset, PersistentDataset
+from monai.data import ImageDataset, CacheDataset
 
 # rtk
 from rtk import *
@@ -49,6 +55,50 @@ from rtk.utils import (
 
 logger = get_logger(__name__, level=logging.DEBUG)
 console = _console
+
+
+def set_transforms(data: DatasetDict, **kwargs):
+    data_dir = kwargs.get("data_dir", ".")
+    size = kwargs.get("size", 448)
+
+    def _load_image_as_pil(examples: dict):
+
+        image_files = [
+            os.path.join(data_dir, image_file) for image_file in examples["image_files"]
+        ]
+        images = [Image.open(image_file).convert("RGB") for image_file in image_files]
+        return images
+
+    _train_transforms = Compose(
+        [
+            Resize((size, size)),
+            RandomRotation(90),
+            RandomAdjustSharpness(2),
+        ]
+    )
+
+    def train_transforms(examples: dict):
+        images = _load_image_as_pil(examples)
+        examples["image"] = [_train_transforms(image) for image in images]
+        return examples
+
+    data["train"].set_transform(train_transforms)
+
+    _val_transforms = Compose(
+        [
+            Resize((size, size)),
+        ]
+    )
+
+    def val_transforms(examples: dict):
+        images = _load_image_as_pil(examples)
+        examples["image"] = [_val_transforms(image) for image in images]
+        return examples
+
+    data["validate"].set_transform(val_transforms)
+
+    if data.get("test", None) is not None:
+        data["test"].set_transform(val_transforms)
 
 
 def visualize_scan(

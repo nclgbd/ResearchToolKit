@@ -35,11 +35,16 @@ COLOR_LOGGER_FORMAT: logging.Formatter = ColoredFormatter(
 
 
 def intro(args: DictConfig, console: Console = Console()):
+    from huggingface_hub import login as hf_login
+
+    # if args.get("hf_token", None):
+    #     hf_login(token=args.hf_token, skip_if_logged_in=True)
+
     console.clear()
     console.print(Markdown("# SigLIP Training"))
-    assert os.environ.get(
-        "HF_TOKEN", ""
-    ), "Please set the `HF_TOKEN` environment variable."
+    # assert os.environ.get(
+    #     "HF_TOKEN", ""
+    # ), "Please set the `HF_TOKEN` environment variable."
 
     config_str = OmegaConf.to_yaml(args, resolve=True)
     console.print(Markdown("## Configuration\n\n"))

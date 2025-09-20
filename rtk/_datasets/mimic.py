@@ -24,9 +24,6 @@ from rtk.utils import (
     _console,
     get_logger,
     hydra_instantiate,
-    load_patient_dataset,
-    load_patient_dataset,
-    login,
 )
 
 MIMIC_CLASS_NAMES = [
@@ -261,6 +258,8 @@ def load_mimic_image_datasets(
     random_state = kwargs.get("random_state", None)
     if random_state is None:
         random_state = cfg.random_state
+
+    from rtk.azure import load_patient_dataset, login
 
     ws = login()
     patient_data = load_patient_dataset(ws, dataset_cfg.patient_data).set_index(index)

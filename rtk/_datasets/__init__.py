@@ -23,7 +23,6 @@ from transformers import AutoTokenizer
 # rtk
 from rtk import *
 from rtk.config import *
-from rtk.utils import load_patient_dataset, login
 
 BASE_PROMPT = "this is a photo of chest x-ray depicting "
 
@@ -228,6 +227,9 @@ def create_transforms(
 def load_metadata(
     index: str, return_workspace=False, ws: Workspace = None, *args, **kwargs
 ):
+
+    from rtk.azure import load_patient_dataset, login
+
     if ws is None:
         ws: Workspace = login()
 
