@@ -14,6 +14,7 @@ from sklearn.metrics import classification_report, confusion_matrix, roc_auc_sco
 # rtk
 from rtk.utils import get_console, get_logger
 
+METRICS_DIR = "metrics"
 console = get_console()
 logger = get_logger(__name__, level=logging.DEBUG)
 
@@ -59,7 +60,7 @@ def generate_classification_report(
         )
     )
     if log:
-        metrics_dir = f"metrics/{curr_time}".strip()
+        metrics_dir = f"{METRICS_DIR}/{curr_time}".strip()
         os.makedirs(metrics_dir, exist_ok=True)
         # Classification summary
         summary_path = os.path.join(metrics_dir, f"classification_summary.csv")
@@ -76,6 +77,6 @@ def generate_classification_report(
             cfm_path,
         )
 
-        MLflow.log_artifact(metrics_dir, "metrics")
+        MLflow.log_artifact(metrics_dir, METRICS_DIR)
 
     return summary_dict
