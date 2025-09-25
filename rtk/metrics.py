@@ -11,6 +11,9 @@ from typing import List, Union
 # sklearn
 from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score
 
+# huggingface
+from transformers import TrainerState
+
 # rtk
 from rtk.utils import get_console, get_logger
 
@@ -25,10 +28,11 @@ def generate_classification_report(
     y_score: Union[np.ndarray, pd.Series] = None,
     target_names=[f"No Pneumonia", "Pneumonia"],
     log: bool = False,
+    state: TrainerState = None,
 ):
     logger.info(f"Generating classification report...")
     curr_time = pd.Timestamp.now().strftime("%Y-%m-%d_%H-%M-%S")
-
+    curr_step = "-1" if state is None else str(state.global_step).zfill(6)
     # Classification report
     cr: dict = classification_report(
         y_true, y_pred, target_names=target_names, output_dict=True
@@ -43,11 +47,12 @@ def generate_classification_report(
         # "auc-score": round(roc_auc_score(y_true, y_score, labels=target_names), 4),
         "accuracy": round(cr["accuracy"], 4),
     }
+    index = curr_step if state else curr_time
     summary = pd.DataFrame(
         summary_dict,
-        index=[f"{curr_time}"],
+        index=[index],
     )
-    summary.index.name = "timestamp"
+    summary.index.name = "step" if state else "timestamp"
     console.print(Markdown("## Classification Report"))
     console.print(tabulate(summary, headers="keys", tablefmt="rounded_grid"))
 
@@ -60,7 +65,8 @@ def generate_classification_report(
         )
     )
     if log:
-        metrics_dir = f"{METRICS_DIR}/{curr_time}".strip()
+        subfolder = curr_step if state else curr_time
+        metrics_dir = f"{METRICS_DIR}/{subfolder}".strip()
         os.makedirs(metrics_dir, exist_ok=True)
         # Classification summary
         summary_path = os.path.join(metrics_dir, f"classification_summary.csv")
