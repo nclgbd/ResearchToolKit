@@ -1,7 +1,7 @@
+--extra-index-url https://download.pytorch.org/whl/cu117
 accelerate
 azureml-core
 azureml-dataset-runtime
-bitstring
 diffusers
 einops
 hydra-colorlog
@@ -18,9 +18,9 @@ pytorch-ignite==0.4.12
 rich
 scikit-image
 scikit-learn
-timm==0.9.7
-torch==2.0.0
-torchvision==0.15.1
+timm
+torch==2.0.1
+torchvision==0.15.2
 tqdm
+transformers==4.37.2
 xlrd
-git+https://github.com/nclgbd/GenerativeModels.git

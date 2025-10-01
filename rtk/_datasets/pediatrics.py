@@ -16,17 +16,17 @@ import monai
 from rtk import *
 from rtk._datasets import create_transforms
 from rtk.config import *
-from rtk.utils import login, get_logger, load_patient_dataset
+from rtk.utils import get_logger
 
 
 logger = get_logger(__name__)
 
 
 def build_chest_xray_metadata_dataframe(
-    cfg: Configuration = None, split: str = "", **kwargs
+    cfg: ImageClassificationConfiguration = None, split: str = "", **kwargs
 ):
     logger.info(f"Building chest x-ray metadata dataframe for split: '{split}'...\n")
-    dataset_cfg: DatasetConfiguration = kwargs.get(
+    dataset_cfg: ImageDatasetConfiguration = kwargs.get(
         "dataset_cfg", cfg.datasets if cfg is not None else None
     )
     resample_value: int = dataset_cfg.get("resample_value", 1)
@@ -61,9 +61,12 @@ def build_chest_xray_metadata_dataframe(
 
 
 def load_pediatrics_dataset(
-    cfg: Configuration = None, save_metadata=False, return_metadata=False, **kwargs
+    cfg: ImageClassificationConfiguration = None,
+    save_metadata=False,
+    return_metadata=False,
+    **kwargs,
 ):
-    dataset_cfg: DatasetConfiguration = kwargs.get(
+    dataset_cfg: ImageDatasetConfiguration = kwargs.get(
         "dataset_cfg", cfg.datasets if cfg is not None else None
     )
     use_transforms = kwargs.get(

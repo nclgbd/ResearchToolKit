@@ -19,22 +19,27 @@ from torchmetrics.image.fid import FrechetInceptionDistance
 from torchmetrics.image.inception import InceptionScore
 from torchmetrics.image.ssim import StructuralSimilarityIndexMeasure
 
+import monai
+
 # :huggingface:
 import accelerate
 from accelerate import Accelerator
 from accelerate.state import AcceleratorState
+from accelerate.utils import ProjectConfiguration, set_seed
 from diffusers.training_utils import EMAModel, cast_training_params
 from diffusers import (
-    UNet2DConditionModel,
-    DiffusionPipeline,
-    DDPMScheduler,
+    AutoPipelineForText2Image,
     AutoencoderKL,
+    DDPMScheduler,
+    DiffusionPipeline,
+    StableDiffusionPipeline,
+    UNet2DConditionModel,
 )
+from diffusers.utils import deprecate
 from diffusers.utils.import_utils import is_xformers_available
 
 # transformers
-from transformers import CLIPTokenizer
-from transformers.models.clip.modeling_clip import CLIPTextModel
+from transformers import AutoTokenizer, AutoModel
 from transformers.utils import ContextManagers
 
 # peft
@@ -45,9 +50,9 @@ from peft.utils import get_peft_model_state_dict
 import mlflow
 
 # rtk
-from rtk import datasets
+from rtk import datasets, _MAX_RAND_INT
 from rtk.config import *
-from rtk.utils import hydra_instantiate, _strip_target, get_logger
+from rtk.utils import hydra_instantiate, strip_target, get_logger
 
 logger = get_logger(__name__)
 
@@ -57,7 +62,7 @@ def instantiate_torch_metrics(tm_cfg: TorchMetricsConfiguration, remap=True, **k
     metrics = {}
     for metric_cfg in _metrics:
         metric = hydra_instantiate(metric_cfg, **kwargs)
-        target_name = _strip_target(metric_cfg, lower=False)
+        target_name = strip_target(metric_cfg, lower=False)
         if remap:
             try:
                 target_name: str = tm_cfg.remap[target_name]
@@ -81,6 +86,72 @@ def instantiate_torch_metrics(tm_cfg: TorchMetricsConfiguration, remap=True, **k
     return metrics
 
 
+def prepare_accelerator(
+    args: TextToImageConfiguration, device_placement: bool = False, seed: int = None
+):
+    non_ema_revision = None if "non_ema_revision" not in args else args.non_ema_revision
+    if non_ema_revision is not None:
+        deprecate(
+            "non_ema_revision!=None",
+            "0.15.0",
+            message=(
+                "Downloading 'non_ema' weights from revision branches of the Hub is deprecated. Please make sure to"
+                " use `--variant=non_ema` instead."
+            ),
+        )
+
+    logging_dir = os.path.join(args.output_dir, args.log_dir)
+    accelerator_project_config = ProjectConfiguration(
+        project_dir=args.output_dir, logging_dir=logging_dir
+    )
+
+    # device_placement = False
+    gradient_accumulation_steps = args.get("gradient_accumulation_steps", 1)
+    mixed_precision = args.get("mixed_precision", "fp16")
+    accelerator: Accelerator = Accelerator(
+        gradient_accumulation_steps=gradient_accumulation_steps,
+        mixed_precision=mixed_precision,
+        project_config=accelerator_project_config,
+        device_placement=device_placement,
+    )
+    device: torch.device = (
+        accelerator.device if device_placement else torch.device(args.device)
+    )
+
+    logger.info(f"Accelerator state:\n{accelerator.state}")
+    logger.info(f"Using device:\t'{device}'")
+
+    # If passed along, set the training seed now.
+    seed: int = (
+        args.get("random_state", random.randint(0, _MAX_RAND_INT))
+        if seed is None
+        else seed
+    )
+    args.random_state = seed
+
+    set_seed(seed)
+    monai.utils.set_determinism(seed=seed)
+
+    logger.info(f"Using seed:\t{args.random_state}")
+
+    # Handle the repository creation
+    if accelerator.is_main_process:
+        if args.output_dir is not None:
+            os.makedirs(args.output_dir, exist_ok=True)
+
+    # For mixed precision training we cast all non-trainable weigths (vae, non-lora text_encoder and non-lora unet) to half-precision
+    # as these weights are only used for inference, keeping weights in full precision is not required.
+    weight_dtype: torch.dtype = torch.float32
+    if accelerator.mixed_precision == "fp16":
+        weight_dtype = torch.float16
+        mixed_precision = accelerator.mixed_precision
+    elif accelerator.mixed_precision == "bf16":
+        weight_dtype = torch.bfloat16
+        mixed_precision = accelerator.mixed_precision
+
+    return accelerator, weight_dtype, device
+
+
 def compile_huggingface_pipeline(
     cfg: TextToImageConfiguration,
     accelerator: Accelerator,
@@ -93,14 +164,12 @@ def compile_huggingface_pipeline(
     device = device if device is not None else accelerator.device
 
     unet: UNet2DConditionModel = hydra_instantiate(hf_cfg.unet)
+
     scheduler: DDPMScheduler = hydra_instantiate(
         hf_cfg.scheduler, torch_dtype=weight_dtype
     )
-    tokenizer: CLIPTokenizer = hydra_instantiate(
+    tokenizer: AutoTokenizer = hydra_instantiate(
         hf_cfg.tokenizer, torch_dtype=weight_dtype
-    )
-    pipeline: DiffusionPipeline = hydra_instantiate(
-        hf_cfg.pipeline, torch_dtype=weight_dtype,
     )
 
     def deepspeed_zero_init_disabled_context_manager():
@@ -127,7 +196,7 @@ def compile_huggingface_pipeline(
         # frozen models from being partitioned during `zero.Init` which gets called during
         # `from_pretrained` So CLIPTextModel and AutoencoderKL will not enjoy the parameter sharding
         # across multiple gpus and only UNet2DConditionModel will get ZeRO sharded.
-        text_encoder: CLIPTextModel = hydra_instantiate(
+        text_encoder: AutoModel = hydra_instantiate(
             hf_cfg.text_encoder, torch_dtype=weight_dtype
         )
         vae: AutoencoderKL = hydra_instantiate(hf_cfg.vae, torch_dtype=weight_dtype)
@@ -142,23 +211,34 @@ def compile_huggingface_pipeline(
     for param in unet.parameters():
         param.requires_grad_(False)
 
+    # if cfg.resume_from_checkpoint == None:
+    base_model_name_or_path = (
+        cfg.resume_from_checkpoint
+        if cfg.resume_from_checkpoint != None
+        else cfg.pretrained_model_name_or_path
+    )
     unet_lora_config = LoraConfig(
+        base_model_name_or_path=base_model_name_or_path,
         r=cfg.rank,
         lora_alpha=cfg.rank,
         init_lora_weights="gaussian",
         target_modules=["to_k", "to_q", "to_v", "to_out.0"],
     )
 
+    # Add adapter and make sure the trainable params are in float32.
+    unet.add_adapter(unet_lora_config)
+    if cfg.resume_from_checkpoint != None:
+        unet.load_attn_procs(
+            cfg.resume_from_checkpoint, weight_name="pytorch_lora_weights.safetensors"
+        )
+    if cfg.mixed_precision == "fp16":
+        # only upcast trainable parameters (LoRA) into fp32
+        cast_training_params(unet, dtype=torch.float32)
+
     # Move unet, vae and text_encoder to device and cast to weight_dtype
     unet.to(device, dtype=weight_dtype)
     vae.to(device, dtype=weight_dtype)
     text_encoder.to(device, dtype=weight_dtype)
-
-    # Add adapter and make sure the trainable params are in float32.
-    unet.add_adapter(unet_lora_config)
-    if cfg.mixed_precision == "fp16":
-        # only upcast trainable parameters (LoRA) into fp32
-        cast_training_params(unet, dtype=torch.float32)
 
     # Create EMA for the unet.
     ema_unet: torch.nn.Module = None
@@ -228,7 +308,7 @@ def compile_huggingface_pipeline(
                 "xformers is not available. Make sure it is installed correctly"
             )
 
-    return pipeline, unet, scheduler, tokenizer, text_encoder, vae, ema_unet
+    return unet, scheduler, tokenizer, text_encoder, vae, ema_unet
 
 
 # https://colab.research.google.com/github/huggingface/notebooks/blob/main/diffusers/training_example.ipynb
@@ -253,14 +333,11 @@ def evaluate(
     **kwargs,
 ):
     logger.info("Evaluating model...")
+    batch_size: int = cfg.datasets.dataloader.batch_size
     if True:
-        logger.warn("Skipping metric evaluation")
+        logger.debug("Skipping metric evaluation")
 
-        num_samples = (
-            num_samples
-            if num_samples is not None
-            else cfg.datasets.dataloader.batch_size
-        )
+        num_samples = num_samples if num_samples is not None else batch_size
         generator = torch.Generator(device=device).manual_seed(epoch)
         fake_images = generate_samples(
             cfg,
@@ -339,7 +416,7 @@ def evaluate(
 
 
 def generate_samples(
-    cfg: Configuration,
+    cfg: ImageClassificationConfiguration,
     pipeline: DiffusionPipeline,
     device: torch.device,
     epoch: int = 0,
@@ -350,12 +427,12 @@ def generate_samples(
 ):
     logger.info("Generating samples...")
     generator = (
-        torch.Generator(device=device).manual_seed(cfg.random_state)
+        torch.Generator(device=device).manual_seed(epoch)
         if generator is None
         else generator
     )
 
-    batch_size = cfg.datasets.dataloader.batch_size
+    batch_size: int = cfg.datasets.dataloader.batch_size
     samples_images = []
 
     # The default pipeline output type is `List[PIL.Image]`
@@ -375,22 +452,21 @@ def generate_samples(
 
     if save_images:
         # Make a grid out of the images
-        random_samples = random.choices(samples_images, k=batch_size)
-        image_grid = make_grid(random_samples)
+        # random_samples = random.choices(samples_images, k=batch_size)
+        image_grid = make_grid(samples_images[:num_samples])
 
         # Save the images
         test_dir = os.path.join("artifacts", "samples")
         os.makedirs(test_dir, exist_ok=True)
-        img_path = f"{test_dir}/{(epoch+1):04d}.png"
+        img_path = f"{test_dir}/{(epoch+1):06d}.png"
         image_grid.save(img_path)
-        mlflow.log_artifact(img_path)
+        mlflow.log_artifact(img_path, test_dir)
 
     return samples_images
 
 
 def forward_diffusion(
     clean_images: torch.Tensor,
-    model_cfg: Configuration,
     noise_scheduler: DDPMScheduler,
 ):
     # Sample noise to add to the images

@@ -1,32 +1,37 @@
-"""Custom transforms for the datasets."""
+"""Custom transforms for formatted datasets."""
+
+import PIL.JpegImagePlugin
+import numpy as np
+import PIL
 
 # torch
-from torchvision.transforms import PILToTensor, Lambda, ToPILImage
+from torchvision.transforms import Lambda
 import torch
 import torchxrayvision as xrv
 
 
-def __convert_rgb_to_grayscale(x):
+def __convert_three_channel_to_one(x):
     return x.mean(2)[None, ...]
 
 
 def RGBToGrayscale():
-    return Lambda(__convert_rgb_to_grayscale)
+    return Lambda(__convert_three_channel_to_one)
+
+
+def __convert_one_channel_to_three(x: torch.Tensor, mode="BGR"):
+    x = x.repeat(3, 1, 1)
+    return x
+
+
+def GrayscaleToRGB():
+    return Lambda(__convert_one_channel_to_three)
 
 
 def __apply_xrv_normalize(x, maxval=255.0):
+    if isinstance(x, PIL.JpegImagePlugin.JpegImageFile):
+        x = np.array(x.convert("RGB")).transpose(2, 0, 1)
     return xrv.datasets.normalize(x, maxval)
 
 
 def XRVNormalize():
     return Lambda(__apply_xrv_normalize)
-
-
-def __convert_grayscale_to_rgb(x: torch.Tensor):
-    x = ToPILImage()(x)
-    x = x.convert("RGB")
-    return PILToTensor()(x)
-
-
-def GrayscaleToRGB():
-    return Lambda(__convert_grayscale_to_rgb)

@@ -3,65 +3,58 @@ General utility functions. These are not specific to any deep learning framework
 """
 
 # imports
+import hydra
 import logging
 import os
-import pandas as pd
+import textwrap
 import yaml
-import hydra
-from copy import deepcopy
 from argparse import Namespace
 from colorlog import ColoredFormatter
 from logging import Logger
 from omegaconf import DictConfig, OmegaConf
 from rich.console import Console
 from rich.logging import RichHandler
+from rich.markdown import Markdown
 
-# azureml
-from azureml.core import Workspace
-from azureml.core.dataset import Dataset
-
-# rtk
-from rtk import DEFAULT_DATA_PATH
 
 __all__ = [
     "_console",
-    "_logger",
+    # "_logger",
     "COLOR_LOGGER_FORMAT",
     "get_console",
     "get_logger",
-    "login",
-    "repl",
 ]
 
-LOG_TIME_FORMAT = "[%X]"
+LOGGING_DIR = "logs"
+LOG_TIME_FORMAT = "[%X]".strip()
 COLOR_LOGGER_FORMAT: logging.Formatter = ColoredFormatter(
-    fmt="%(name)s: %(message)s", datefmt=LOG_TIME_FORMAT
+    fmt="%(name)s - %(message)s".strip(),
+    # datefmt=LOG_TIME_FORMAT,
+    reset=False,
 )
 
 
-def login(
-    from_config=True,
-    **kwargs,
-):
-    """
-    Login to AzureML workspace. If path is provided, will load from the specified config file.
+def intro(args: DictConfig, console: Console = Console()):
+    from huggingface_hub import login as hf_login
 
-    ## Args:
-    * `from_config` (`bool`, optional): Whether to load from config file or provide the `subscription_id`. Defaults to `True`.
-    * `kwargs` (`dict`): Keyword arguments for `Workspace()`.
+    # if args.get("hf_token", None):
+    #     hf_login(token=args.hf_token, skip_if_logged_in=True)
 
-    ## Returns:
-    * `Workspace`: AzureML workspace object.
-    """
+    console.clear()
+    console.print(Markdown("# SigLIP Training"))
+    # assert os.environ.get(
+    #     "HF_TOKEN", ""
+    # ), "Please set the `HF_TOKEN` environment variable."
 
-    if from_config:
-        ws = Workspace.from_config()
-
-    else:
-        ws = Workspace(**kwargs)
-
-    _logger.debug("Workspace: {}".format(ws.name))
-    return ws
+    config_str = OmegaConf.to_yaml(args, resolve=True)
+    console.print(Markdown("## Configuration\n\n"))
+    config_str = textwrap.dedent(
+        f"""
+        ```yaml
+{config_str}
+        """
+    ).strip()
+    console.print(Markdown(config_str))
 
 
 def get_console(**kwargs) -> Console:
@@ -73,10 +66,21 @@ def get_console(**kwargs) -> Console:
 
     """
 
-    return kwargs.get("console", Console(**kwargs))
+    # log_file = kwargs.get("file", None)
+    # if log_file:
+    #     file_io = open(log_file, "a")
+    #     kwargs["file"] = file_io
+    return kwargs.get("console", Console(record=True, **kwargs))
 
 
-def get_logger(name: str = None, level: int = logging.INFO):
+_console = get_console()
+
+
+def get_logger(
+    name: str = None,
+    level: int = logging.INFO,
+    console: Console = Console(),
+) -> Logger:
     """
     Function to get a logger with a `RichHandler`. Sets up the logger with a custom format and a `StreamHandler`.
 
@@ -90,98 +94,26 @@ def get_logger(name: str = None, level: int = logging.INFO):
 
     logger: Logger = logging.getLogger(name)
     logger.setLevel(level=level)
+
+    # File settings
+    # curr_dir = os.getcwd()
+    # os.makedirs("logs", exist_ok=True)
+    # file_handler = logging.FileHandler(f"logs/{name}.log")
+    # file_handler.setFormatter(COLOR_LOGGER_FORMAT)
+    # logger.addHandler(file_handler)
+
+    # Color settings
     rich_handler = RichHandler(
-        rich_tracebacks=True,
+        # rich_tracebacks=True,
+        # console=console,
         level=level,
         log_time_format=LOG_TIME_FORMAT,
-        console=get_console(),
     )
     rich_handler.setFormatter(COLOR_LOGGER_FORMAT)
     logger.addHandler(rich_handler)
     logger.propagate = False
 
     return logger
-
-
-def load_patient_dataset(
-    ws: Workspace,
-    patient_dataset_name: str,
-    patient_dataset_version="latest",
-    data_dir: os.PathLike = DEFAULT_DATA_PATH,
-    pandas_read_fn: callable = pd.read_csv,
-    **kwargs,
-):
-    """
-    Load a patient dataset from AzureML. If the dataset is not found locally, it will be downloaded from AzureML and saved to the local cache.
-
-    ## Args:
-    * `ws` (`Workspace`): The AzureML workspace.
-    * `patient_dataset_name` (`str`): The name of the patient dataset.
-    * `patient_dataset_version` (`str`, optional): The version of the patient dataset. Defaults to `"latest"`.
-    * `data_dir` (`os.PathLike`, optional): The path to the data directory. Defaults to `DEFAULT_DATA_PATH`.
-    * `pandas_read_fn` (`callable`, optional): The function to use to read the CSV file. Defaults to `pd.read_csv`.
-    * `**kwargs`: Keyword arguments for `pandas_read_fn`.
-    ## Returns:
-    * `pd.DataFrame`: The patient dataset.
-    """
-
-    _logger.info(f"Patient dataset:\t\t'{patient_dataset_name}'")
-    _patients_csv_path = os.path.join(
-        data_dir, "patients", f"{patient_dataset_name}:{patient_dataset_version}.csv"
-    )
-    patients_csv_path = os.path.abspath(_patients_csv_path)
-    try:
-        _logger.debug(
-            f"Attempting to load patient dataset from: '{patients_csv_path}'..."
-        )
-        patient_df = pandas_read_fn(patients_csv_path, **kwargs)
-
-    except FileNotFoundError:
-        _logger.warning(
-            f"Patient dataset '{patient_dataset_name}' not found. Downloading from AzureML..."
-        )
-        patient_df: pd.DataFrame = Dataset.get_by_name(
-            ws, name=patient_dataset_name, version=patient_dataset_version
-        ).to_pandas_dataframe()
-        os.makedirs(os.path.dirname(patients_csv_path), exist_ok=True)
-        patient_df.to_csv(patients_csv_path, index=False)
-
-    return patient_df
-
-
-def load_scan_dataset(
-    ws: Workspace,
-    scan_dataset_name: str,
-    scan_dataset_version="latest",
-    data_dir: os.PathLike = DEFAULT_DATA_PATH,
-    mount=True,
-):
-    """
-    Load a scan dataset from AzureML. If the dataset is not found locally, it will be downloaded from AzureML and saved to the local cache.
-
-    ## Args:
-    * `ws` (`Workspace`): The AzureML workspace.
-    * `scan_dataset_name` (`str`): The name of the scan dataset.
-    * `scan_dataset_version` (`str`, optional): The version of the scan dataset. Defaults to `"latest"`.
-    * `data_dir` (`os.PathLike`, optional): The path to the data directory. Defaults to `DEFAULT_DATA_PATH`.
-    * `mount` (`bool`, optional): Whether to mount the dataset or download it. Defaults to `True`.
-    """
-    _logger.info(f"Scan dataset:\t\t'{scan_dataset_name}'\n")
-
-    scan_dataset: Dataset = Dataset.get_by_name(
-        ws, name=scan_dataset_name, version=scan_dataset_version
-    )
-    if mount:
-        scan_mount = scan_dataset.mount()
-        _logger.info(f"Mounting scan dataset to '{scan_mount.mount_point}'.")
-        return scan_mount
-    else:
-        target_path = os.path.join(
-            data_dir, "scans", f"{scan_dataset_name}:{scan_dataset_version}"
-        )
-        _logger.info(f"Downloading scan dataset to '{data_dir}'.")
-        scan_dataset.download(target_path=target_path, overwrite=True)
-        return scan_dataset
 
 
 def hydra_instantiate(cfg: DictConfig, **kwargs):
@@ -194,10 +126,10 @@ def hydra_instantiate(cfg: DictConfig, **kwargs):
     ## Returns:
     * `Any`: The instantiated class.
     """
-    target_class_name = cfg["_target_"].split(".")[-1]
-    _logger.debug(
-        "Instantiating object '{}' from configuration".format(target_class_name)
-    )
+    # target_class_name = cfg["_target_"].split(".")[-1]
+    # _logger.debug(
+    #     "Instantiating object '{}' from configuration".format(target_class_name)
+    # )
     return hydra.utils.instantiate(cfg, **kwargs)
 
 
@@ -222,12 +154,11 @@ def yaml_to_configuration(file_path: str):
     return cfg
 
 
-def _strip_target(_dict: dict, lower=False):
+def strip_target(_dict: dict, lower=False):
     target_name: str = _dict["_target_"].split(".")[-1]
     if lower:
         target_name = target_name.lower()
     return target_name
 
 
-_console = get_console()
-_logger = get_logger(__name__)
+# _logger = get_logger(__name__)
