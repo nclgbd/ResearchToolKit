@@ -18,43 +18,36 @@ from rich.markdown import Markdown
 
 
 __all__ = [
-    "_console",
-    # "_logger",
-    "COLOR_LOGGER_FORMAT",
+    # "COLOR_LOGGER_FORMAT",
+    # "LOG_TIME_FORMAT",
+    # "_console",
     "get_console",
     "get_logger",
+    "hydra_instantiate",
+    "intro",
+    "rich_handler",
+    "strip_target",
+    "yaml_to_configuration",
+    "yaml_to_namespace",
 ]
 
-LOGGING_DIR = "logs"
+# LOGGING_DIR = "logs"
 LOG_TIME_FORMAT = "[%X]".strip()
 COLOR_LOGGER_FORMAT: logging.Formatter = ColoredFormatter(
     fmt="%(name)s - %(message)s".strip(),
     # datefmt=LOG_TIME_FORMAT,
     reset=False,
 )
-
-
-def intro(args: DictConfig, console: Console = Console()):
-    from huggingface_hub import login as hf_login
-
-    # if args.get("hf_token", None):
-    #     hf_login(token=args.hf_token, skip_if_logged_in=True)
-
-    console.clear()
-    console.print(Markdown("# SigLIP Training"))
-    # assert os.environ.get(
-    #     "HF_TOKEN", ""
-    # ), "Please set the `HF_TOKEN` environment variable."
-
-    config_str = OmegaConf.to_yaml(args, resolve=True)
-    console.print(Markdown("## Configuration\n\n"))
-    config_str = textwrap.dedent(
-        f"""
-        ```yaml
-{config_str}
-        """
-    ).strip()
-    console.print(Markdown(config_str))
+# Color settings
+rich_handler = RichHandler(
+    # rich_tracebacks=True,
+    # console=console,
+    log_time_format=LOG_TIME_FORMAT,
+)
+rich_handler.setFormatter(COLOR_LOGGER_FORMAT)
+# logging.basicConfig(
+#     level=logging.INFO, datefmt="[%X]", handlers=[rich_handler], force=True
+# )
 
 
 def get_console(**kwargs) -> Console:
@@ -76,10 +69,28 @@ def get_console(**kwargs) -> Console:
 _console = get_console()
 
 
+def intro(
+    args: DictConfig, title: str = "SigLIP Training", console: Console = _console
+):
+
+    console.clear()
+    console.print(Markdown(f"# {title}"))
+    config_str = OmegaConf.to_yaml(args, resolve=True)
+    console.print(Markdown("## Configuration\n\n"))
+    config_str = textwrap.dedent(
+        f"""
+        ```yaml
+{config_str}
+        """
+    ).strip()
+    console.print(Markdown(config_str))
+    return config_str
+
+
 def get_logger(
     name: str = None,
     level: int = logging.INFO,
-    console: Console = Console(),
+    console: Console = None,
 ) -> Logger:
     """
     Function to get a logger with a `RichHandler`. Sets up the logger with a custom format and a `StreamHandler`.
@@ -95,28 +106,20 @@ def get_logger(
     logger: Logger = logging.getLogger(name)
     logger.setLevel(level=level)
 
-    # File settings
-    # curr_dir = os.getcwd()
-    # os.makedirs("logs", exist_ok=True)
-    # file_handler = logging.FileHandler(f"logs/{name}.log")
-    # file_handler.setFormatter(COLOR_LOGGER_FORMAT)
-    # logger.addHandler(file_handler)
+    # # File settings
+    # # curr_dir = os.getcwd()
+    # # os.makedirs("logs", exist_ok=True)
+    # # file_handler = logging.FileHandler(f"logs/{name}.log")
+    # # file_handler.setFormatter(COLOR_LOGGER_FORMAT)
+    # # logger.addHandler(file_handler)
 
-    # Color settings
-    rich_handler = RichHandler(
-        # rich_tracebacks=True,
-        # console=console,
-        level=level,
-        log_time_format=LOG_TIME_FORMAT,
-    )
-    rich_handler.setFormatter(COLOR_LOGGER_FORMAT)
-    logger.addHandler(rich_handler)
-    logger.propagate = False
+    # logger.addHandler(rich_handler)
+    # logger.propagate = False
 
     return logger
 
 
-def hydra_instantiate(cfg: DictConfig, **kwargs):
+def hydra_instantiate(args: DictConfig, **kwargs):
     """
     Instantiates an object from a configuration.
 
@@ -130,7 +133,7 @@ def hydra_instantiate(cfg: DictConfig, **kwargs):
     # _logger.debug(
     #     "Instantiating object '{}' from configuration".format(target_class_name)
     # )
-    return hydra.utils.instantiate(cfg, **kwargs)
+    return hydra.utils.instantiate(args, **kwargs)
 
 
 def yaml_to_namespace(yaml_file: os.PathLike):

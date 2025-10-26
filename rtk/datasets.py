@@ -653,7 +653,7 @@ def prepare_validation_dataloaders(cfg: ImageConfiguration = None, **kwargs):
 
     loaders = []
     train_loader: DataLoader = hydra_instantiate(
-        cfg=dataset_cfg.dataloader,
+        args=dataset_cfg.dataloader,
         dataset=train_dataset,
         pin_memory=torch.cuda.is_available() if torch.cuda.is_available() else False,
         shuffle=True,
@@ -662,7 +662,7 @@ def prepare_validation_dataloaders(cfg: ImageConfiguration = None, **kwargs):
 
     if val_dataset is not None:
         val_loader: DataLoader = hydra_instantiate(
-            cfg=dataset_cfg.dataloader,
+            args=dataset_cfg.dataloader,
             dataset=val_dataset,
             pin_memory=torch.cuda.is_available(),
             shuffle=True,
@@ -670,7 +670,7 @@ def prepare_validation_dataloaders(cfg: ImageConfiguration = None, **kwargs):
         loaders.append(val_loader)
 
     test_loader: DataLoader = hydra_instantiate(
-        cfg=dataset_cfg.dataloader,
+        args=dataset_cfg.dataloader,
         dataset=test_dataset,
         pin_memory=torch.cuda.is_available(),
         shuffle=False,

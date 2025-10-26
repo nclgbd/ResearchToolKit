@@ -161,7 +161,7 @@ def instantiate_model(
     if "clip" in model_cfg.get("model_name", None):
         return create_clip_model(cfg, **kwargs)
 
-    model: nn.Module = hydra_instantiate(cfg=model_cfg.model)
+    model: nn.Module = hydra_instantiate(args=model_cfg.model)
 
     if model_cfg.get("last_layer", False):
         model.op_threshs = None  # prevent pre-trained model calibration
@@ -209,7 +209,7 @@ def instantiate_criterion(
     * `cfg` (`Configuration`): The model configuration.
     """
     console.log("Instantiating criterion (loss function)...")
-    criterion: nn.Module = hydra_instantiate(cfg=cfg.models.criterion, **kwargs)
+    criterion: nn.Module = hydra_instantiate(args=cfg.models.criterion, **kwargs)
     return criterion.to(device)
 
 
@@ -225,6 +225,6 @@ def instantiate_optimizer(
     """
     console.log("Instantiating optimizer...")
     optimizer: torch.optim.Optimizer = hydra_instantiate(
-        cfg=cfg.models.optimizer, params=model.parameters(), **kwargs
+        args=cfg.models.optimizer, params=model.parameters(), **kwargs
     )
     return optimizer

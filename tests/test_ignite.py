@@ -59,21 +59,21 @@ class TestIgnite:
         )
         train_dataset = train_val_test_split_dict["train"]
         train_loader: DataLoader = hydra_instantiate(
-            cfg=dataset_cfg.dataloader,
+            args=dataset_cfg.dataloader,
             dataset=train_dataset,
             pin_memory=torch.cuda.is_available(),
             shuffle=True,
         )
         val_dataset = train_val_test_split_dict["val"]
         val_loader = hydra_instantiate(
-            cfg=dataset_cfg.dataloader,
+            args=dataset_cfg.dataloader,
             dataset=val_dataset,
             pin_memory=torch.cuda.is_available(),
             shuffle=True,
         )
         test_dataset = _datasets[1]
         test_loader = hydra_instantiate(
-            cfg=dataset_cfg.dataloader,
+            args=dataset_cfg.dataloader,
             dataset=test_dataset,
             pin_memory=torch.cuda.is_available(),
             shuffle=True,
