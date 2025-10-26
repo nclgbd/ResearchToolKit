@@ -5,37 +5,36 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug run_job.py: tests conf",
+            "name": "Debug sync_mlflow_and_huggingface.py (label-extraction): juhua-exxact",
             "type": "debugpy",
             "request": "launch",
-            "program": "scripts/run_job.py",
+            "program": "/data/nicoleg/workspaces/ResearchToolKit/scripts/sync_mlflow_and_huggingface.py",
             "console": "integratedTerminal",
             "justMyCode": true,
             "args": [
-                "--config-name",
-                "tests",
-                "--config-path",
-                "../configs/",
-                "job.epoch_length=8",
-                "job.max_epochs=2",
-                "++mlflow.experiment_name=tests",
+                // "-d",
+                "-e",
+                "label-extraction",
+                "-r",
+                "nclgbd/mimic-cxr-labelled-dataset-test",
+                "-t",
+                "dataset"
             ]
         },
         {
-            "name": "Debug run_diffusion.py: tests conf",
+            "name": "Debug sync_mlflow_and_huggingface.py (label-extraction-test): juhua-exxact",
             "type": "debugpy",
             "request": "launch",
-            "program": "scripts/run_diffusion.py",
+            "program": "/data/nicoleg/workspaces/ResearchToolKit/scripts/sync_mlflow_and_huggingface.py",
             "console": "integratedTerminal",
             "justMyCode": true,
             "args": [
-                "--config-name",
-                "tests",
-                "--config-path",
-                "../configs/",
-                "job.epoch_length=8",
-                "job.max_epochs=2",
-                "++mlflow.experiment_name=tests",
+                "-e",
+                "label-extraction-test",
+                "-r",
+                "nclgbd/mimic-cxr-labelled-dataset-test",
+                "-t",
+                "dataset"
             ]
         },
     ]

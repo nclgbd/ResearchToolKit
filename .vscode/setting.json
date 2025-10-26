@@ -1,18 +1,14 @@
 {
   "python.testing.pytestEnabled": true,
   "python.testing.pytestPath": ".",
-  "python.testing.pytestArgs": [
-    "-v",
-    "--log-level=DEBUG",
-    "-m",
-    "not diffusion"
-  ],
-  "hide-files.files": [
-    "__pycache__",
-    ".pytest_cache",
-    ".vscode/__pycache__",
-    "rtk/**/__pycache__",
-    "tests/__pycache__",
-    "/home/nicoleg/workspaces/dissertation/.archive"
-  ]
+  "python.testing.pytestArgs": ["-v", "--log-level=DEBUG"],
+  "files.exclude": {
+    "**/.git": true,
+    "**/.svn": true,
+    "**/.hg": true,
+    "**/.DS_Store": true,
+    "**/Thumbs.db": true,
+    "**/CVS": true
+  },
+  "hide-files.files": []
 }
