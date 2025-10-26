@@ -57,9 +57,9 @@ logger = get_logger(__name__, level=logging.DEBUG)
 console = _console
 
 
-def set_transforms(data: DatasetDict, **kwargs):
-    data_dir = kwargs.get("data_dir", ".")
-    size = kwargs.get("size", 448)
+def set_transforms(
+    data: DatasetDict, data_dir: str = ".", size: int = 448, split: str = "", **kwargs
+):
 
     def _load_image_as_pil(examples: dict):
 
@@ -69,36 +69,56 @@ def set_transforms(data: DatasetDict, **kwargs):
         images = [Image.open(image_file).convert("RGB") for image_file in image_files]
         return images
 
-    _train_transforms = Compose(
-        [
-            Resize((size, size)),
-            RandomRotation(90),
-            RandomAdjustSharpness(2),
-        ]
+    _apply_train_transforms = kwargs.get(
+        "apply_train_transforms", "train" in data or split == "train"
     )
+    if _apply_train_transforms:
+        logger.info("Setting train transforms...")
+        _train_transforms = kwargs.get(
+            "train_transforms",
+            Compose(
+                [
+                    Resize((size, size)),
+                    RandomRotation(90),
+                    RandomAdjustSharpness(2),
+                ]
+            ),
+        )
 
-    def train_transforms(examples: dict):
-        images = _load_image_as_pil(examples)
-        examples["image"] = [_train_transforms(image) for image in images]
-        return examples
+        def train_transforms(examples: dict):
+            images = _load_image_as_pil(examples)
+            examples["image"] = [_train_transforms(image) for image in images]
+            return examples
 
-    data["train"].set_transform(train_transforms)
+        data["train"].set_transform(train_transforms)
 
-    _val_transforms = Compose(
-        [
-            Resize((size, size)),
-        ]
+    _apply_eval_transforms = kwargs.get(
+        "apply_eval_transforms",
+        "validate" in data or "test" in data or split == "val" or split == "test",
     )
+    if _apply_eval_transforms:
 
-    def val_transforms(examples: dict):
-        images = _load_image_as_pil(examples)
-        examples["image"] = [_val_transforms(image) for image in images]
-        return examples
+        def val_transforms(examples: dict):
 
-    data["validate"].set_transform(val_transforms)
+            _val_transforms = kwargs.get(
+                "eval_transforms",
+                Compose(
+                    [
+                        Resize((size, size)),
+                    ]
+                ),
+            )
+            images = _load_image_as_pil(examples)
+            examples["image"] = [_val_transforms(image) for image in images]
+            return examples
 
-    if data.get("test", None) is not None:
-        data["test"].set_transform(val_transforms)
+        if "validate" in data:
+            logger.info("Setting validation transforms...")
+            data["validate"].set_transform(val_transforms)
+
+        if "test" in data:
+            logger.info("Setting test transforms...")
+            data["test"].set_transform(val_transforms)
 
 
 def visualize_scan(
