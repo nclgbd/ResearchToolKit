@@ -10,6 +10,7 @@ import textwrap
 import yaml
 from argparse import Namespace
 from colorlog import ColoredFormatter
+from dotenv import load_dotenv
 from logging import Logger
 from omegaconf import DictConfig, OmegaConf
 from rich.console import Console
@@ -73,6 +74,8 @@ def intro(
     args: DictConfig, title: str = "SigLIP Training", console: Console = _console
 ):
 
+    env_file = args.get("env_file", "../.env")
+    load_dotenv(env_file)
     console.clear()
     console.print(Markdown(f"# {title}"))
     config_str = OmegaConf.to_yaml(args, resolve=True)
@@ -155,6 +158,10 @@ def yaml_to_configuration(file_path: str):
     del cfg["defaults"]
     cfg = DictConfig(cfg)
     return cfg
+
+
+def namespace_to_configuration(namespace: Namespace):
+    return DictConfig(vars(namespace))
 
 
 def strip_target(_dict: dict, lower=False):
