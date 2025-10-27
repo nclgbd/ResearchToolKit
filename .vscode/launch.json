@@ -5,23 +5,6 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug sync_mlflow_and_huggingface.py (label-extraction): juhua-exxact",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "/data/nicoleg/workspaces/ResearchToolKit/scripts/sync_mlflow_and_huggingface.py",
-            "console": "integratedTerminal",
-            "justMyCode": true,
-            "args": [
-                // "-d",
-                "-e",
-                "label-extraction",
-                "-r",
-                "nclgbd/mimic-cxr-labelled-dataset-test",
-                "-t",
-                "dataset"
-            ]
-        },
-        {
             "name": "Debug sync_mlflow_and_huggingface.py (label-extraction-test): juhua-exxact",
             "type": "debugpy",
             "request": "launch",
@@ -29,8 +12,26 @@
             "console": "integratedTerminal",
             "justMyCode": true,
             "args": [
+                //"-d",
+                "-pr",
                 "-e",
                 "label-extraction-test",
+                "-r",
+                "nclgbd/mimic-cxr-labelled-dataset-test",
+                "-t",
+                "dataset"
+            ]
+        },
+        {
+            "name": "Debug sync_mlflow_and_huggingface.py (label-extraction): juhua-exxact",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "/data/nicoleg/workspaces/ResearchToolKit/scripts/sync_mlflow_and_huggingface.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": [
+                "-e",
+                "label-extraction",
                 "-r",
                 "nclgbd/mimic-cxr-labelled-dataset-test",
                 "-t",

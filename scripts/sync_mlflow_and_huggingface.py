@@ -16,7 +16,7 @@ from huggingface_hub import delete_branch, list_repo_refs
 from rtk.utils import intro, namespace_to_configuration, get_console
 
 console = get_console()
-MAIN_BRANCH_NAME = "[red]'main'[/red]"
+MAIN_BRANCH_NAME = "[bold][red]'main'[/red][/bold]"
 pretty.install()
 exclude_branches = [
     "main",
@@ -41,14 +41,24 @@ def gather_runs_from_mlflow_experiment(experiment_name: str) -> list[str]:
     console.log(f"Branches to delete from mlflow:\t{len(branches_to_delete)}")
     return branches_to_delete
 
-def gather_branches_from_huggingface(repo_id: str, repo_type: str, include_pull_requests=False):
-    git_refs = list_repo_refs(repo_id=repo_id, repo_type=repo_type, include_pull_requests=include_pull_requests)
+
+def gather_branches_from_huggingface(
+    repo_id: str, repo_type: str, include_pull_requests=False
+):
+    git_refs = list_repo_refs(
+        repo_id=repo_id,
+        repo_type=repo_type,
+        include_pull_requests=include_pull_requests,
+    )
     branches_to_delete = [ref.name for ref in git_refs.branches]
+    if include_pull_requests:
+        branches_to_delete += [ref.ref for ref in git_refs.pull_requests]
     branches_to_delete = list(
         filter(lambda b: b not in exclude_branches, branches_to_delete)
     )
     console.log(f"Branches to delete from 🤗:\t{len(branches_to_delete)}")
     return branches_to_delete
+
 
 def delete_branches(
     repo_id: str, branches_to_delete: list[str], repo_type: str, dry_run=True
@@ -57,26 +67,31 @@ def delete_branches(
     for i, branch in enumerate(branches_to_delete):
         if dry_run:
             time.sleep(1)
-            console.log(f"Dry run: would delete branch '{branch}' ({i+1})")
+            console.log(f"Dry run: would delete branch: ({i+1}) '{branch}'.")
         else:
             flag = False
+            hf_flag = False
+            mlflow_flag = False
             try:
                 delete_branch(repo_id=repo_id, repo_type=repo_type, branch=branch)
-                console.log(f"Deleted branch: '{branch}' ({i+1})")
+                console.log(f"Deleted branch: ({i+1}) '{branch}'.")
             except Exception as e:
-                console.log(f"Could not delete 🤗 branch '{branch}' ({i+1}) due to error: {e}.")
-                flag = True
-    
+                console.log(
+                    f"Could not delete 🤗 branch: ({i+1}) '{branch}' due to error:\t'{e.__class__.__name__}'."
+                )
+                hf_flag = True
+
             try:
                 mlflow.delete_run(branch)
-                console.log(f"Deleted mlflow branch: '{branch}' ({i+1})")
+                console.log(f"Deleted mlflow run: ({i+1}) '{branch}'.")
             except Exception as e:
-                console.log(f"Could not delete mlflow branch '{branch}' ({i+1}) due to error: {e}.")
-                flag = True
-            
+                console.log(
+                    f"Could not delete mlflow run: ({i+1}) '{branch}' due to error::\t'{e.__class__.__name__}'."
+                )
+                mlflow_flag = True
+
             if flag:
                 total -= 1
-            
 
     console.log(f"Deleted {total} branches.")
 
@@ -86,25 +101,33 @@ def main(args: argparse.Namespace):
     repo_type: str = args.repo_type
     experiment_name: str = args.experiment_name
     mlflow_branches_to_delete = gather_runs_from_mlflow_experiment(experiment_name)
-    hf_branches_to_delete = gather_branches_from_huggingface(repo_id, repo_type)
-    
-    if "main" in mlflow_branches_to_delete:
-        console.log(f"The {MAIN_BRANCH_NAME} branch was detected in the list of branches to delete. This is [red]dangerous[/red]... are you sure you want to delete it?")
-        response = console.input(f"Type {MAIN_BRANCH_NAME} to delete {MAIN_BRANCH_NAME} branch?")
+    hf_branches_to_delete = gather_branches_from_huggingface(
+        repo_id, repo_type, args.include_pull_requests
+    )
+    branches_to_delete = list(
+        set(mlflow_branches_to_delete) | set(hf_branches_to_delete)
+    )
+    if "main" in branches_to_delete:
+        console.log(
+            f"The {MAIN_BRANCH_NAME} branch was detected in the list of branches to delete. This is [red]dangerous[/red]... are you sure you want to delete it?"
+        )
+        response = console.input(
+            f"Type {MAIN_BRANCH_NAME} to delete {MAIN_BRANCH_NAME} branch?"
+        )
         if response.lower() != "main":
-            console.log(f"Invalid response. Removing {MAIN_BRANCH_NAME} from the list of branches to delete.")
-            mlflow_branches_to_delete.remove("main")
+            console.log(
+                f"Invalid response. Removing {MAIN_BRANCH_NAME} from the list of branches to delete."
+            )
+            branches_to_delete.remove("main")
         else:
             console.log(f"{MAIN_BRANCH_NAME} branch included for deletion...")
             time.sleep(5)
 
-    
-    branches_to_delete = list(set(mlflow_branches_to_delete) | set(hf_branches_to_delete))
     console.log(f"Branches to delete: {branches_to_delete}")
-    with console.status(f"Attempting to delete a total of {len(branches_to_delete)} branches..."):
+    with console.status(
+        f"Attempting to delete a total of {len(branches_to_delete)} branches..."
+    ):
         delete_branches(repo_id, branches_to_delete, repo_type, dry_run=args.dry_run)
-    
-
 
 
 if __name__ == "__main__":
@@ -119,6 +142,7 @@ if __name__ == "__main__":
     argparser.add_argument("-d", "--dry-run", action="store_true")
     argparser.add_argument("-e", "--experiment-name", default="default")
     argparser.add_argument("-r", "--repo-id", default=str())
+    argparser.add_argument("-pr", "--include-pull-requests", action="store_true")
     argparser.add_argument(
         "-t", "--repo-type", default=str(), choices=["model", "dataset"]
     )
