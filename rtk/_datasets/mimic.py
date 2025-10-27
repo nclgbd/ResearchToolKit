@@ -10,15 +10,16 @@ from torchvision.transforms import Compose
 from sklearn.preprocessing import LabelEncoder, MultiLabelBinarizer
 
 # monai
-import monai
-import monai.transforms as monai_transforms
-from monai.data import ImageDataset
+# import monai
+# import monai.transforms as monai_transforms
+# from monai.data import ImageDataset
 
 # rtk
 import rtk
-from rtk import *
-from rtk._datasets import *
-from rtk._datasets.nih import NIH_CLASS_NAMES
+
+# from rtk import *
+# from rtk._datasets import *
+# from rtk._datasets.nih import NIH_CLASS_NAMES
 from rtk.config import *
 from rtk.utils import (
     _console,
@@ -98,267 +99,267 @@ def create_mimic_reports(x, data_dir: str = None):
     return report_file
 
 
-def load_mimic_text_dataset(
-    cfg: BaseConfiguration,
-    metadata: pd.DataFrame,
-    tokenizer: AutoTokenizer,
-    subset_to_positive_class=False,
-    return_metadata=False,
-    use_absolute_paths=True,
-    **kwargs,
-):
-    class_names = MIMIC_CLASS_NAMES
-    random_state = cfg.random_state
-    dataset_cfg = cfg.datasets
-    target = dataset_cfg.target
-    data_dir: str = dataset_cfg.scan_data
-    preprocessing_cfg = cfg.datasets.preprocessing
-    positive_class = kwargs.get("positive_class", preprocessing_cfg.positive_class)
-    id2label = {i: l for i, l in enumerate(class_names)}
-    label2id = {l: i for i, l in enumerate(class_names)}
-    encodings = {"id2label": id2label, "label2id": label2id}
+# def load_mimic_text_dataset(
+#     cfg: BaseConfiguration,
+#     metadata: pd.DataFrame,
+#     tokenizer: AutoTokenizer,
+#     subset_to_positive_class=False,
+#     return_metadata=False,
+#     use_absolute_paths=True,
+#     **kwargs,
+# ):
+#     class_names = MIMIC_CLASS_NAMES
+#     random_state = cfg.random_state
+#     dataset_cfg = cfg.datasets
+#     target = dataset_cfg.target
+#     data_dir: str = dataset_cfg.scan_data
+#     preprocessing_cfg = cfg.datasets.preprocessing
+#     positive_class = kwargs.get("positive_class", preprocessing_cfg.positive_class)
+#     id2label = {i: l for i, l in enumerate(class_names)}
+#     label2id = {l: i for i, l in enumerate(class_names)}
+#     encodings = {"id2label": id2label, "label2id": label2id}
 
-    # remove all of the negative class for diffusion
-    if subset_to_positive_class:
-        console.log("Removing all negative classes...")
-        metadata = metadata[metadata[positive_class] == 1]
+#     # remove all of the negative class for diffusion
+#     if subset_to_positive_class:
+#         console.log("Removing all negative classes...")
+#         metadata = metadata[metadata[positive_class] == 1]
 
-    if cfg.mode == "evaluate":
-        overlapped_classes = set(NIH_CLASS_NAMES).intersection(set(MIMIC_CLASS_NAMES))
-        drop_classes = list(set(class_names) - set(overlapped_classes))
-        for d in drop_classes:
-            metadata = metadata.drop(metadata[metadata[d] == 1].index)
-        logger.debug(
-            f"Overlapped classes: {overlapped_classes}. Dropping: {drop_classes}"
-        )
-        class_counts = metadata[class_names].sum()
-        console.log(f"Class counts:\n{class_counts}")
+#     if cfg.mode == "evaluate":
+#         overlapped_classes = set(NIH_CLASS_NAMES).intersection(set(MIMIC_CLASS_NAMES))
+#         drop_classes = list(set(class_names) - set(overlapped_classes))
+#         for d in drop_classes:
+#             metadata = metadata.drop(metadata[metadata[d] == 1].index)
+#         logger.debug(
+#             f"Overlapped classes: {overlapped_classes}. Dropping: {drop_classes}"
+#         )
+#         class_counts = metadata[class_names].sum()
+#         console.log(f"Class counts:\n{class_counts}")
 
-    # def _create_multiclass_labels(x):
-    #     finding_labels = []
-    #     for column in class_names:
-    #         if x[column] == 1:
-    #             finding_labels.append(column)
-    #     if finding_labels == []:
-    #         finding_labels.append("No Finding")
-    #     return finding_labels
+#     # def _create_multiclass_labels(x):
+#     #     finding_labels = []
+#     #     for column in class_names:
+#     #         if x[column] == 1:
+#     #             finding_labels.append(column)
+#     #     if finding_labels == []:
+#     #         finding_labels.append("No Finding")
+#     #     return finding_labels
 
-    # console.log("Creating multiclass labels...")
-    # metadata["multiclass_labels"] = metadata.apply(_create_multiclass_labels, axis=1)
-    # mlb = MultiLabelBinarizer(classes=class_names)
-    # mlb.fit(metadata["multiclass_labels"])
+#     # console.log("Creating multiclass labels...")
+#     # metadata["multiclass_labels"] = metadata.apply(_create_multiclass_labels, axis=1)
+#     # mlb = MultiLabelBinarizer(classes=class_names)
+#     # mlb.fit(metadata["multiclass_labels"])
 
-    if use_absolute_paths:
-        console.log(f"Formatting file paths '{data_dir}'...")
-        metadata["image_files"] = metadata["image_files"].apply(
-            lambda x: os.path.join(data_dir, x)
-        )
-        metadata["report_files"] = metadata["report_files"].apply(
-            lambda x: os.path.join(data_dir, x)
-        )
+#     if use_absolute_paths:
+#         console.log(f"Formatting file paths '{data_dir}'...")
+#         metadata["image_files"] = metadata["image_files"].apply(
+#             lambda x: os.path.join(data_dir, x)
+#         )
+#         metadata["report_files"] = metadata["report_files"].apply(
+#             lambda x: os.path.join(data_dir, x)
+#         )
 
-    console.log(f"Creating binary prompts based on '{positive_class}'...")
-    create_binary_prompts(cfg, metadata)
+#     console.log(f"Creating binary prompts based on '{positive_class}'...")
+#     create_binary_prompts(cfg, metadata)
 
-    console.log("Creating text prompts...")
-    metadata["text_prompts"] = metadata.apply(
-        apply_label_to_text_prompts, classes=class_names, axis=1
-    )
+#     console.log("Creating text prompts...")
+#     metadata["text_prompts"] = metadata.apply(
+#         apply_label_to_text_prompts, classes=class_names, axis=1
+#     )
 
-    if use_absolute_paths:
-        console.log("Reading reports...")
-        metadata["reports"] = metadata["report_files"].apply(read_mimic_reports)
+#     if use_absolute_paths:
+#         console.log("Reading reports...")
+#         metadata["reports"] = metadata["report_files"].apply(read_mimic_reports)
 
-    # split the dataset into train/val/test
-    train_metadata = metadata[metadata["split"] == "train"]
-    val_metadata = metadata[metadata["split"] == "validate"]
-    test_metadata = metadata[metadata["split"] == "test"]
+#     # split the dataset into train/val/test
+#     train_metadata = metadata[metadata["split"] == "train"]
+#     val_metadata = metadata[metadata["split"] == "validate"]
+#     test_metadata = metadata[metadata["split"] == "test"]
 
-    # resample train data if needed
-    if (
-        preprocessing_cfg.use_sampling
-        and subset_to_positive_class == False
-        and cfg.mode != "evaluate"
-    ):
-        train_metadata = resample_to_value(
-            train_metadata,
-            class_names,
-            dataset_cfg=dataset_cfg,
-            preprocessing_cfg=preprocessing_cfg,
-            sampling_strategy=target,
-            random_state=random_state,
-        )
+#     # resample train data if needed
+#     if (
+#         preprocessing_cfg.use_sampling
+#         and subset_to_positive_class == False
+#         and cfg.mode != "evaluate"
+#     ):
+#         train_metadata = resample_to_value(
+#             train_metadata,
+#             class_names,
+#             dataset_cfg=dataset_cfg,
+#             preprocessing_cfg=preprocessing_cfg,
+#             sampling_strategy=target,
+#             random_state=random_state,
+#         )
 
-    for split, data in {
-        "train": train_metadata,
-        "validation": val_metadata,
-        "test": test_metadata,
-    }.items():
-        class_counts = data[class_names].sum()
-        console.log(f"'{split.capitalize()}' class counts:\n{class_counts}")
+#     for split, data in {
+#         "train": train_metadata,
+#         "validation": val_metadata,
+#         "test": test_metadata,
+#     }.items():
+#         class_counts = data[class_names].sum()
+#         console.log(f"'{split.capitalize()}' class counts:\n{class_counts}")
 
-    return train_metadata, val_metadata, test_metadata
+#     return train_metadata, val_metadata, test_metadata
 
-    # train_dataset: HGFDataset = create_text_dataset(
-    #     train_metadata,
-    #     data_path=dataset_cfg.scan_data,
-    #     target=target,
-    #     # mlb=mlb,
-    #     tokenizer=tokenizer,
-    #     split="train",
-    #     **kwargs,
-    # )
-    # eval_dataset: HGFDataset = create_text_dataset(
-    #     val_metadata,
-    #     target=target,
-    #     # mlb=mlb,
-    #     data_path=dataset_cfg.scan_data,
-    #     tokenizer=tokenizer,
-    #     split="validation",
-    #     **kwargs,
-    # )
-    # test_dataset: HGFDataset = create_text_dataset(
-    #     test_metadata,
-    #     target=target,
-    #     # mlb=mlb,
-    #     data_path=dataset_cfg.scan_data,
-    #     tokenizer=tokenizer,
-    #     split="test",
-    #     **kwargs,
-    # )
+#     # train_dataset: HGFDataset = create_text_dataset(
+#     #     train_metadata,
+#     #     data_path=dataset_cfg.scan_data,
+#     #     target=target,
+#     #     # mlb=mlb,
+#     #     tokenizer=tokenizer,
+#     #     split="train",
+#     #     **kwargs,
+#     # )
+#     # eval_dataset: HGFDataset = create_text_dataset(
+#     #     val_metadata,
+#     #     target=target,
+#     #     # mlb=mlb,
+#     #     data_path=dataset_cfg.scan_data,
+#     #     tokenizer=tokenizer,
+#     #     split="validation",
+#     #     **kwargs,
+#     # )
+#     # test_dataset: HGFDataset = create_text_dataset(
+#     #     test_metadata,
+#     #     target=target,
+#     #     # mlb=mlb,
+#     #     data_path=dataset_cfg.scan_data,
+#     #     tokenizer=tokenizer,
+#     #     split="test",
+#     #     **kwargs,
+#     # )
 
-    # ret: list = [train_dataset, eval_dataset, test_dataset, encodings]
-    # return ret
+#     # ret: list = [train_dataset, eval_dataset, test_dataset, encodings]
+#     # return ret
 
 
-def load_mimic_image_datasets(
-    cfg: ImageConfiguration = None,
-    return_metadata=False,
-    save_metadata=False,
-    subset_to_positive_class=False,
-    **kwargs,
-) -> List[ImageDataset]:
+# def load_mimic_image_datasets(
+#     cfg: ImageConfiguration = None,
+#     return_metadata=False,
+#     save_metadata=False,
+#     subset_to_positive_class=False,
+#     **kwargs,
+# ) -> List[ImageDataset]:
 
-    dataset_cfg: ImageDatasetConfiguration = kwargs.get("dataset_cfg", None)
-    if dataset_cfg is None:
-        dataset_cfg = cfg.datasets
-    index = kwargs.get("index", dataset_cfg.index)
-    target = kwargs.get("target", dataset_cfg.target)
+#     dataset_cfg: ImageDatasetConfiguration = kwargs.get("dataset_cfg", None)
+#     if dataset_cfg is None:
+#         dataset_cfg = cfg.datasets
+#     index = kwargs.get("index", dataset_cfg.index)
+#     target = kwargs.get("target", dataset_cfg.target)
 
-    preprocessing_cfg = kwargs.get("preprocessing_cfg", None)
-    if preprocessing_cfg is None:
-        preprocessing_cfg = dataset_cfg.preprocessing
+#     preprocessing_cfg = kwargs.get("preprocessing_cfg", None)
+#     if preprocessing_cfg is None:
+#         preprocessing_cfg = dataset_cfg.preprocessing
 
-    positive_class = kwargs.get("positive_class", None)
-    if positive_class == None:
-        positive_class = preprocessing_cfg.get(
-            "positive_class", preprocessing_cfg.get("positive_class", "Pneumonia")
-        )
+#     positive_class = kwargs.get("positive_class", None)
+#     if positive_class == None:
+#         positive_class = preprocessing_cfg.get(
+#             "positive_class", preprocessing_cfg.get("positive_class", "Pneumonia")
+#         )
 
-    random_state = kwargs.get("random_state", None)
-    if random_state is None:
-        random_state = cfg.random_state
+#     random_state = kwargs.get("random_state", None)
+#     if random_state is None:
+#         random_state = cfg.random_state
 
-    from rtk.azure import load_patient_dataset, login
+#     from rtk.azure import load_patient_dataset, login
 
-    ws = login()
-    patient_data = load_patient_dataset(ws, dataset_cfg.patient_data).set_index(index)
+#     ws = login()
+#     patient_data = load_patient_dataset(ws, dataset_cfg.patient_data).set_index(index)
 
-    # remove all of the negative class for diffusion
-    if subset_to_positive_class:
-        console.log("Removing all negative classes...")
-        patient_data = patient_data[patient_data[positive_class] == 1]
+#     # remove all of the negative class for diffusion
+#     if subset_to_positive_class:
+#         console.log("Removing all negative classes...")
+#         patient_data = patient_data[patient_data[positive_class] == 1]
 
-    train_metadata = patient_data[patient_data["split"] == "train"]
-    val_metadata = patient_data[patient_data["split"] == "validate"]
-    test_metadata = patient_data[patient_data["split"] == "test"]
+#     train_metadata = patient_data[patient_data["split"] == "train"]
+#     val_metadata = patient_data[patient_data["split"] == "validate"]
+#     test_metadata = patient_data[patient_data["split"] == "test"]
 
-    if preprocessing_cfg.use_sampling and subset_to_positive_class == False:
-        train_metadata = resample_to_value(
-            train_metadata,
-            MIMIC_CLASS_NAMES,
-            dataset_cfg=dataset_cfg,
-            preprocessing_cfg=preprocessing_cfg,
-            sampling_strategy=target,
-            random_state=random_state,
-        )
+#     if preprocessing_cfg.use_sampling and subset_to_positive_class == False:
+#         train_metadata = resample_to_value(
+#             train_metadata,
+#             MIMIC_CLASS_NAMES,
+#             dataset_cfg=dataset_cfg,
+#             preprocessing_cfg=preprocessing_cfg,
+#             sampling_strategy=target,
+#             random_state=random_state,
+#         )
 
-    train_class_counts = get_class_counts(train_metadata, MIMIC_CLASS_NAMES)
-    console.log(f"Train class counts:\n{train_class_counts}")
+#     train_class_counts = get_class_counts(train_metadata, MIMIC_CLASS_NAMES)
+#     console.log(f"Train class counts:\n{train_class_counts}")
 
-    val_class_counts = get_class_counts(val_metadata, MIMIC_CLASS_NAMES)
-    console.log(f"Validation class counts:\n{val_class_counts}")
+#     val_class_counts = get_class_counts(val_metadata, MIMIC_CLASS_NAMES)
+#     console.log(f"Validation class counts:\n{val_class_counts}")
 
-    test_class_counts = get_class_counts(test_metadata, MIMIC_CLASS_NAMES)
-    console.log(f"Test class counts:\n{test_class_counts}")
+#     test_class_counts = get_class_counts(test_metadata, MIMIC_CLASS_NAMES)
+#     console.log(f"Test class counts:\n{test_class_counts}")
 
-    if save_metadata:
-        patient_metadata_path = os.path.join(DEFAULT_DATA_PATH, "patients")
-        train_metadata.to_csv(
-            os.path.join(patient_metadata_path, f"mimic_train_metadata.csv")
-        )
+#     if save_metadata:
+#         patient_metadata_path = os.path.join(DEFAULT_DATA_PATH, "patients")
+#         train_metadata.to_csv(
+#             os.path.join(patient_metadata_path, f"mimic_train_metadata.csv")
+#         )
 
-        val_metadata.to_csv(
-            os.path.join(patient_metadata_path, f"mimic_val_metadata.csv")
-        )
+#         val_metadata.to_csv(
+#             os.path.join(patient_metadata_path, f"mimic_val_metadata.csv")
+#         )
 
-        test_metadata.to_csv(
-            os.path.join(patient_metadata_path, f"mimic_test_metadata.csv")
-        )
+#         test_metadata.to_csv(
+#             os.path.join(patient_metadata_path, f"mimic_test_metadata.csv")
+#         )
 
-    if return_metadata:
-        return train_metadata, val_metadata, test_metadata
+#     if return_metadata:
+#         return train_metadata, val_metadata, test_metadata
 
-    def __build_mimic_data_split(
-        dataset_cfg: DatasetConfiguration,
-        data: pd.DataFrame,
-        transforms: monai_transforms.Compose,
-    ):
-        # dataset_cfg = dataset_cfg.datasets
-        image_files = [
-            os.path.join(dataset_cfg.scan_data, f) for f in data[IMAGE_KEYNAME].values
-        ]
-        labels = list(data[target].values)
+#     def __build_mimic_data_split(
+#         dataset_cfg: DatasetConfiguration,
+#         data: pd.DataFrame,
+#         transforms: monai_transforms.Compose,
+#     ):
+#         # dataset_cfg = dataset_cfg.datasets
+#         image_files = [
+#             os.path.join(dataset_cfg.scan_data, f) for f in data[IMAGE_KEYNAME].values
+#         ]
+#         labels = list(data[target].values)
 
-        dataset = hydra_instantiate(
-            dataset_cfg.instantiate,
-            image_files=image_files,
-            labels=labels,
-            transform=transforms,
-        )
-        return dataset
+#         dataset = hydra_instantiate(
+#             dataset_cfg.instantiate,
+#             image_files=image_files,
+#             labels=labels,
+#             transform=transforms,
+#         )
+#         return dataset
 
-    # use transforms
-    # use_transforms = kwargs.get("use_transforms", True)
-    train_transforms = kwargs.get(
-        "train_transforms",
-        None,
-    )
-    if train_transforms is None:
-        train_transforms = create_transforms(
-            cfg,
-            use_transforms=cfg.use_transforms,
-        )
+#     # use transforms
+#     # use_transforms = kwargs.get("use_transforms", True)
+#     train_transforms = kwargs.get(
+#         "train_transforms",
+#         None,
+#     )
+#     if train_transforms is None:
+#         train_transforms = create_transforms(
+#             cfg,
+#             use_transforms=cfg.use_transforms,
+#         )
 
-    eval_transforms = kwargs.get(
-        "eval_transforms",
-        None,
-    )
-    if eval_transforms is None:
-        eval_transforms = create_transforms(
-            cfg,
-            use_transforms=False,
-        )
+#     eval_transforms = kwargs.get(
+#         "eval_transforms",
+#         None,
+#     )
+#     if eval_transforms is None:
+#         eval_transforms = create_transforms(
+#             cfg,
+#             use_transforms=False,
+#         )
 
-    # form datasets
-    train_dataset = __build_mimic_data_split(
-        dataset_cfg=dataset_cfg, data=train_metadata, transforms=train_transforms
-    )
-    val_dataset = __build_mimic_data_split(
-        dataset_cfg=dataset_cfg, data=val_metadata, transforms=eval_transforms
-    )
-    test_dataset = __build_mimic_data_split(
-        dataset_cfg=dataset_cfg, data=test_metadata, transforms=eval_transforms
-    )
+#     # form datasets
+#     train_dataset = __build_mimic_data_split(
+#         dataset_cfg=dataset_cfg, data=train_metadata, transforms=train_transforms
+#     )
+#     val_dataset = __build_mimic_data_split(
+#         dataset_cfg=dataset_cfg, data=val_metadata, transforms=eval_transforms
+#     )
+#     test_dataset = __build_mimic_data_split(
+#         dataset_cfg=dataset_cfg, data=test_metadata, transforms=eval_transforms
+#     )
 
-    return [train_dataset, val_dataset, test_dataset]
+#     return [train_dataset, val_dataset, test_dataset]
