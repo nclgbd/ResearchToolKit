@@ -1,6 +1,7 @@
 """
 For quick debugging and testing.
 """
+
 from dotenv import load_dotenv
 from rich import pretty, traceback
 from rich import inspect as rich_inspect
