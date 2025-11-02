@@ -18,25 +18,10 @@ from rich.logging import RichHandler
 from rich.markdown import Markdown
 
 
-__all__ = [
-    # "COLOR_LOGGER_FORMAT",
-    # "LOG_TIME_FORMAT",
-    # "_console",
-    "get_console",
-    "get_logger",
-    "hydra_instantiate",
-    "intro",
-    "rich_handler",
-    "strip_target",
-    "yaml_to_configuration",
-    "yaml_to_namespace",
-]
-
 # LOGGING_DIR = "logs"
 LOG_TIME_FORMAT = "[%X]".strip()
 COLOR_LOGGER_FORMAT: logging.Formatter = ColoredFormatter(
     fmt="%(name)s - %(message)s".strip(),
-    # datefmt=LOG_TIME_FORMAT,
     reset=False,
 )
 # Color settings
@@ -46,9 +31,6 @@ rich_handler = RichHandler(
     log_time_format=LOG_TIME_FORMAT,
 )
 rich_handler.setFormatter(COLOR_LOGGER_FORMAT)
-# logging.basicConfig(
-#     level=logging.INFO, datefmt="[%X]", handlers=[rich_handler], force=True
-# )
 
 
 def get_console(**kwargs) -> Console:
@@ -59,11 +41,6 @@ def get_console(**kwargs) -> Console:
     * `Console`: Rich console object.
 
     """
-
-    # log_file = kwargs.get("file", None)
-    # if log_file:
-    #     file_io = open(log_file, "a")
-    #     kwargs["file"] = file_io
     return kwargs.get("console", Console(record=True, **kwargs))
 
 
@@ -109,17 +86,10 @@ def get_logger(
     logger: Logger = logging.getLogger(name)
     logger.setLevel(level=level)
 
-    # # File settings
-    # # curr_dir = os.getcwd()
-    # # os.makedirs("logs", exist_ok=True)
-    # # file_handler = logging.FileHandler(f"logs/{name}.log")
-    # # file_handler.setFormatter(COLOR_LOGGER_FORMAT)
-    # # logger.addHandler(file_handler)
-
-    # logger.addHandler(rich_handler)
-    # logger.propagate = False
-
     return logger
+
+
+logger = get_logger(__name__)
 
 
 def hydra_instantiate(args: DictConfig, **kwargs):
@@ -127,15 +97,11 @@ def hydra_instantiate(args: DictConfig, **kwargs):
     Instantiates an object from a configuration.
 
     ## Args:
-    * `cfg` (`DictConfig`): The Hydra config.
+    * `args` (`DictConfig`): The Hydra config.
     * `**kwargs`: Keyword arguments for the object.
     ## Returns:
     * `Any`: The instantiated class.
     """
-    # target_class_name = cfg["_target_"].split(".")[-1]
-    # _logger.debug(
-    #     "Instantiating object '{}' from configuration".format(target_class_name)
-    # )
     return hydra.utils.instantiate(args, **kwargs)
 
 
@@ -169,6 +135,3 @@ def strip_target(_dict: dict, lower=False):
     if lower:
         target_name = target_name.lower()
     return target_name
-
-
-# _logger = get_logger(__name__)
