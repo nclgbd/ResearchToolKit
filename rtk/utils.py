@@ -17,26 +17,15 @@ from rich.console import Console
 from rich.logging import RichHandler
 from rich.markdown import Markdown
 
+# hydra
+from hydra import compose, initialize_config_dir
+from hydra.core.global_hydra import GlobalHydra
 
-__all__ = [
-    # "COLOR_LOGGER_FORMAT",
-    # "LOG_TIME_FORMAT",
-    # "_console",
-    "get_console",
-    "get_logger",
-    "hydra_instantiate",
-    "intro",
-    "rich_handler",
-    "strip_target",
-    "yaml_to_configuration",
-    "yaml_to_namespace",
-]
 
 # LOGGING_DIR = "logs"
 LOG_TIME_FORMAT = "[%X]".strip()
 COLOR_LOGGER_FORMAT: logging.Formatter = ColoredFormatter(
     fmt="%(name)s - %(message)s".strip(),
-    # datefmt=LOG_TIME_FORMAT,
     reset=False,
 )
 # Color settings
@@ -46,9 +35,6 @@ rich_handler = RichHandler(
     log_time_format=LOG_TIME_FORMAT,
 )
 rich_handler.setFormatter(COLOR_LOGGER_FORMAT)
-# logging.basicConfig(
-#     level=logging.INFO, datefmt="[%X]", handlers=[rich_handler], force=True
-# )
 
 
 def get_console(**kwargs) -> Console:
@@ -59,12 +45,7 @@ def get_console(**kwargs) -> Console:
     * `Console`: Rich console object.
 
     """
-
-    # log_file = kwargs.get("file", None)
-    # if log_file:
-    #     file_io = open(log_file, "a")
-    #     kwargs["file"] = file_io
-    return kwargs.get("console", Console(record=True, **kwargs))
+    return Console(record=True, **kwargs)
 
 
 _console = get_console()
@@ -109,17 +90,38 @@ def get_logger(
     logger: Logger = logging.getLogger(name)
     logger.setLevel(level=level)
 
-    # # File settings
-    # # curr_dir = os.getcwd()
-    # # os.makedirs("logs", exist_ok=True)
-    # # file_handler = logging.FileHandler(f"logs/{name}.log")
-    # # file_handler.setFormatter(COLOR_LOGGER_FORMAT)
-    # # logger.addHandler(file_handler)
-
-    # logger.addHandler(rich_handler)
-    # logger.propagate = False
-
     return logger
+
+
+logger = get_logger(__name__)
+
+
+def set_hydra_configuration(
+    config_name: str,
+    # BaseConfigurationInstance: DictConfig,
+    init_method: callable = initialize_config_dir,
+    init_method_kwargs: dict = {},
+    **compose_kwargs,
+) -> DictConfig:
+    """
+    Creates and returns a hydra configuration.
+
+    ## Args:
+    * `config_name` (`str`): The name of the config (usually the file name without the .yaml extension).
+    * `init_method` (`function`, optional): The initialization method to use. Should be either [`initialize`, `initialize_config_module`, `initialize_config_dir`].
+    Defaults to `initialize_config_dir`.
+    * `init_method_kwargs` (`dict`, optional): Keyword arguments for the `init_method` function.
+    * `compose_kwargs` (`dict`, optional): Keyword arguments for the `compose` function.
+
+    ## Returns:
+    * `DictConfig`: The hydra configuration.
+    """
+    logger.info(f"Creating configuration: '{config_name}'\n")
+    GlobalHydra.instance().clear()
+    init_method(version_base="1.1", **init_method_kwargs)
+    conf: DictConfig = compose(config_name=config_name, **compose_kwargs)
+    # return BaseConfigurationInstance(**conf)
+    return conf
 
 
 def hydra_instantiate(args: DictConfig, **kwargs):
@@ -127,15 +129,11 @@ def hydra_instantiate(args: DictConfig, **kwargs):
     Instantiates an object from a configuration.
 
     ## Args:
-    * `cfg` (`DictConfig`): The Hydra config.
+    * `args` (`DictConfig`): The Hydra config.
     * `**kwargs`: Keyword arguments for the object.
     ## Returns:
     * `Any`: The instantiated class.
     """
-    # target_class_name = cfg["_target_"].split(".")[-1]
-    # _logger.debug(
-    #     "Instantiating object '{}' from configuration".format(target_class_name)
-    # )
     return hydra.utils.instantiate(args, **kwargs)
 
 
@@ -169,6 +167,3 @@ def strip_target(_dict: dict, lower=False):
     if lower:
         target_name = target_name.lower()
     return target_name
-
-
-# _logger = get_logger(__name__)

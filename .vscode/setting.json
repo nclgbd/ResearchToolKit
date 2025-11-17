@@ -1,7 +1,9 @@
 {
   "python.testing.pytestEnabled": true,
-  "python.testing.pytestPath": ".",
-  "python.testing.pytestArgs": ["-v", "--log-level=DEBUG"],
+  "python.testing.pytestArgs": [
+    "-v",
+    "--log-level=DEBUG"
+  ],
   "files.exclude": {
     "**/.git": true,
     "**/.svn": true,

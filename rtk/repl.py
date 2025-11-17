@@ -19,14 +19,6 @@ def install(
     _pretty: bool = True,
     _traceback: bool = True,
 ):
-    """
-    Installs the rich traceback hook and pretty install.
-
-    ## Args:
-        `max_depth` (`int`, optional): Defaults to `3`.
-        `max_length` (`int`, optional): Defaults to `7`.
-        `show_locals` (`bool`, optional): Defaults to `True`.
-    """
     logger.debug("Installing rich.pretty and rich.traceback")
     if _pretty:
         pretty.install(max_depth=max_depth, max_length=max_length, console=console)
@@ -39,7 +31,6 @@ def prepare_console(**kwargs):
 
     install(**kwargs)
     ws = login()
-    console = console
     console.clear()
 
     return ws, console

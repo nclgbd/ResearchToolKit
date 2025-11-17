@@ -19,7 +19,91 @@ from rtk.utils import get_console, get_logger
 
 METRICS_DIR = "metrics"
 console = get_console()
-logger = get_logger(__name__, level=logging.DEBUG)
+logger = get_logger(__name__, level=logging.INFO)
+
+
+def recall_at_k(y_true: int, retrieved_labels: list, k: int) -> float:
+    """
+    Calculate recall@k for a single query.
+
+    Args:
+        y_true: Ground truth label (0 or 1)
+        retrieved_labels: List of labels from retrieved samples
+        k: Number of top results to consider
+
+    Returns:
+        Recall score (1.0 if any positive sample found in top-k when y_true=1, else 0.0)
+    """
+    top_k_labels = retrieved_labels[:k]
+
+    if y_true == 1:  # Ground truth is positive
+        recall_p = 1.0 if any(label == 1 for label in top_k_labels) else 0.0
+        recall_n = None
+    else:  # Ground truth is negative
+        recall_n = 1.0 if any(label == 0 for label in top_k_labels) else 0.0
+        recall_p = None
+
+    return (recall_p, recall_n)
+
+
+def precision_at_k(y_true: int, retrieved_labels: list, k: int) -> float:
+    """
+    Calculate precision@k for a single query.
+
+    Args:
+        y_true: Ground truth label (0 or 1)
+        retrieved_labels: List of labels from retrieved samples
+        k: Number of top results to consider
+
+    Returns:
+        Precision score (fraction of retrieved positive samples in top-k)
+    """
+    top_k_labels = retrieved_labels[:k]
+
+    if y_true == 1:  # Ground truth is positive
+        num_correct = sum(1 for label in top_k_labels if label == 1)
+        precision_p = num_correct / k
+        precision_n = None
+    else:  # Ground truth is negative
+        num_correct = sum(1 for label in top_k_labels if label == 0)
+        precision_n = num_correct / k
+        precision_p = None
+
+    return (precision_p, precision_n)
+
+
+def f1_at_k(y_true: int, retrieved_labels: list, k: int) -> float:
+    """
+    Calculate F1@k for a single query.
+
+    Args:
+        y_true: Ground truth label (0 or 1)
+        retrieved_labels: List of labels from retrieved samples
+        k: Number of top results to consider
+
+    Returns:
+        F1 score
+    """
+    recall_p, recall_n = recall_at_k(y_true, retrieved_labels, k)
+    precision_p, precision_n = precision_at_k(y_true, retrieved_labels, k)
+
+    # Calculate F1 for positive class
+    if recall_p is None or precision_p is None:
+        f1_p = None
+    elif precision_p + recall_p == 0:
+        f1_p = 0.0
+    else:
+        f1_p = 2 * (precision_p * recall_p) / (precision_p + recall_p)
+
+    # Calculate F1 for negative class
+    if recall_n is None or precision_n is None:
+        f1_n = None
+    elif precision_n + recall_n == 0:
+        f1_n = 0.0
+    else:
+        f1_n = 2 * (precision_n * recall_n) / (precision_n + recall_n)
+
+    return (f1_p, f1_n)
 
 
 def generate_classification_report(

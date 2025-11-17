@@ -1,21 +1,21 @@
 defaults:
   - _self_
+  - models: siglip
   - override hydra/hydra_logging: colorlog
   - override hydra/job_logging: colorlog
 
 env_file: /data/nicoleg/workspaces/dissertation/.env
-name:
+name: tests
 dry_run: true
-push_to_hub: true
+push_to_hub: false
 date: ${now:%Y-%m-%d}
 timestamp: ${now:%H-%M-%S}
 dataset_id:
 data_dir: /data/nicoleg/datasets/physionet.org/files/mimic-cxr-jpg/2.1.0
 batched: false
-batch_size:
+batch_size: 1
 positive_class: Pneumonia
 with_rank: false
-model_id:
 
 hydra:
   job:
