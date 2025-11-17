@@ -1,5 +1,6 @@
 defaults:
   - _self_
+  - models: default-model
   - override hydra/hydra_logging: colorlog
   - override hydra/job_logging: colorlog
 
@@ -15,7 +16,6 @@ batched: false
 batch_size:
 positive_class: Pneumonia
 with_rank: false
-model_id:
 
 hydra:
   job:

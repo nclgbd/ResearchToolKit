@@ -1,8 +1,6 @@
 import os
 import pandas as pd
 
-# azureml
-
 # rtk
 from rtk.utils import get_logger, get_console
 

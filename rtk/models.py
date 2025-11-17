@@ -1,10 +1,12 @@
 # imports
 import os
+import warnings
 from PIL import Image
 from hydra.utils import instantiate
 from omegaconf import DictConfig
 
-from azureml.core import Model, Workspace
+warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", category=UserWarning)
 
 # torch imports
 import torch
@@ -12,14 +14,125 @@ import torch.distributed as dist
 import torch.nn as nn
 from torch.nn.parallel import DistributedDataParallel as DDP
 
+# huggingface
+from transformers import (
+    PreTrainedModel,
+    ProcessorMixin,
+    SiglipModel,
+    logging,
+)
+
+
 # open clip
 import open_clip
 
 # rtk
 from rtk import DEFAULT_MODEL_PATH
-from rtk.utils import get_logger
+from rtk.utils import get_console, get_logger
 
+console = get_console()
 logger = get_logger(__name__)
+logging.set_verbosity_error()
+
+
+class Encoder:
+
+    def __init__(
+        self,
+        args: DictConfig,
+        model: PreTrainedModel,
+        processor: ProcessorMixin,
+        tokenizer=None,
+        **kwargs,
+    ):
+        self.args = args
+        self.model_name: str = kwargs.get(
+            "model_name", args.get("model_name", "biomed-clip")
+        )
+        self.data_dir: str = kwargs.get(
+            "data_dir", args.get("data_dir", os.getenv("DATA_DIR"))
+        )
+        self.model_args: dict = args.models[self.model_name]
+        self.tokenizer = tokenizer
+        self.processor = processor
+        self.model = model
+        logger.debug(f"Initialized Encoder with model: '{self.model_name}'")
+
+    @torch.no_grad()
+    def encode_text(self, text):
+        if not isinstance(text, list):
+            text = [text]
+        if "siglip" in self.model_name:
+            inputs = self.processor(
+                text=text,
+                truncation=True,
+                padding="max_length",
+                return_tensors="pt",
+            ).to("cuda")
+            embeddings = self.model.get_text_features(**inputs)
+            return embeddings
+
+        if "clip" in self.model_name:
+            inputs = self.tokenizer(text).to("cuda")
+            embeddings = self.model.encode_text(inputs)
+            return embeddings
+
+    @torch.no_grad()
+    def encode_images(self, image_paths: list) -> torch.Tensor:
+        # Preprocessed in val_transform_images
+        if "clip" in self.model_name:
+            images = [
+                Image.open(os.path.join(self.data_dir, p)).convert("RGB")
+                for p in image_paths
+            ]
+            inputs = torch.stack([self.processor(im) for im in images]).to("cuda")
+            embeddings: torch.Tensor = self.model.encode_image(inputs)
+            return embeddings
+        if "siglip" in self.model_name:
+            images = [
+                Image.open(os.path.join(self.data_dir, p)).convert("RGB")
+                for p in image_paths
+            ]
+            inputs = self.processor(images=images, return_tensors="pt").to("cuda")
+            embeddings: torch.Tensor = self.model.get_image_features(**inputs)
+            return embeddings
+
+
+def create_open_clip_model(args: DictConfig, **kwargs):
+    model_name: str = kwargs.get("model_name", args.get("model_name", ""))
+    model_args: dict = args.models[model_name]
+    model_path: str = model_args["model_id"]
+    model, _, processor = open_clip.create_model_and_transforms(
+        model_path
+    )  # , output_dict=True)
+    model = model.to("cuda")
+    tokenizer: open_clip.tokenizer.HFTokenizer = open_clip.get_tokenizer(
+        model_path, context_length=model.context_length
+    )
+    model.eval()
+    encoder = Encoder(args, model, tokenizer=tokenizer, processor=processor, **kwargs)
+
+    return encoder
+
+
+def create_retrieval_model(args: DictConfig, **kwargs) -> Encoder:
+    model_name: str = kwargs.get("model_name", args.get("model_name", ""))
+    model_args: dict = args.models[model_name]
+
+    model_id = model_args["model_id"]
+    if "clip" in model_name:
+        return create_open_clip_model(args, **kwargs)
+    if "siglip" in model_name:
+        from transformers import SiglipProcessor
+
+        # tokenizer = None
+        model: SiglipModel = SiglipModel.from_pretrained(model_id, device_map="cuda")
+        processor = SiglipProcessor.from_pretrained(model_id)
+
+        model.eval()
+        encoder = Encoder(args, model, processor, **kwargs)
+
+        return encoder
 
 
 def print_trainable_parameters(model: nn.Module):
@@ -32,7 +145,7 @@ def print_trainable_parameters(model: nn.Module):
         all_param += param.numel()
         if param.requires_grad:
             trainable_params += param.numel()
-    logger.info(
+    console.print(
         f"Trainable params: {trainable_params} || All params: {all_param} || Trainable%: {100 * trainable_params / all_param:.2f}"
     )
 

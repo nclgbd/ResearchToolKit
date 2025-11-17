@@ -1,16 +1,8 @@
 # imports
-import logging
-from typing import List
-import hydra
 import numpy as np
 import os
 import pandas as pd
 from PIL import Image
-from collections import Counter
-from copy import deepcopy
-from matplotlib import pyplot as plt
-from omegaconf import OmegaConf
-from random import randint
 
 # torch
 import torch
@@ -27,9 +19,7 @@ from torchvision.transforms import (
 from datasets import Dataset, DatasetDict, load_dataset
 
 # rtk
-from rtk.utils import (
-    get_logger,
-)
+from rtk.utils import get_logger
 
 logger = get_logger(__name__)
 MIMIC_CLASS_NAMES = [
@@ -48,6 +38,19 @@ MIMIC_CLASS_NAMES = [
     "Pneumothorax",
     "Support Devices",
 ]
+CHEXAGENT_PREDICTION_LABELS = (
+    "/data/nicoleg/workspaces/dissertation/.data/CHEXAGENT_PREDICTION_LABELS.txt"
+)
+
+
+def load_mimic_gt_data(positive_class: str = "Pneumonia") -> pd.DataFrame:
+    gt = (
+        load_dataset("vllm-pneumonia-detection/mimic-500-gt", split="test")
+        .to_pandas()[["dicom_id", positive_class]]
+        .set_index("dicom_id")
+    )
+    gt["y_true"] = gt[positive_class].apply(lambda x: 1 if x == 1 else 0)
+    return gt
 
 
 def set_transforms(

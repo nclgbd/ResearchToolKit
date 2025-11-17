@@ -17,6 +17,10 @@ from rich.console import Console
 from rich.logging import RichHandler
 from rich.markdown import Markdown
 
+# hydra
+from hydra import compose, initialize_config_dir
+from hydra.core.global_hydra import GlobalHydra
+
 
 # LOGGING_DIR = "logs"
 LOG_TIME_FORMAT = "[%X]".strip()
@@ -41,7 +45,7 @@ def get_console(**kwargs) -> Console:
     * `Console`: Rich console object.
 
     """
-    return kwargs.get("console", Console(record=True, **kwargs))
+    return Console(record=True, **kwargs)
 
 
 _console = get_console()
@@ -90,6 +94,34 @@ def get_logger(
 
 
 logger = get_logger(__name__)
+
+
+def set_hydra_configuration(
+    config_name: str,
+    # BaseConfigurationInstance: DictConfig,
+    init_method: callable = initialize_config_dir,
+    init_method_kwargs: dict = {},
+    **compose_kwargs,
+) -> DictConfig:
+    """
+    Creates and returns a hydra configuration.
+
+    ## Args:
+    * `config_name` (`str`): The name of the config (usually the file name without the .yaml extension).
+    * `init_method` (`function`, optional): The initialization method to use. Should be either [`initialize`, `initialize_config_module`, `initialize_config_dir`].
+    Defaults to `initialize_config_dir`.
+    * `init_method_kwargs` (`dict`, optional): Keyword arguments for the `init_method` function.
+    * `compose_kwargs` (`dict`, optional): Keyword arguments for the `compose` function.
+
+    ## Returns:
+    * `DictConfig`: The hydra configuration.
+    """
+    logger.info(f"Creating configuration: '{config_name}'\n")
+    GlobalHydra.instance().clear()
+    init_method(version_base="1.1", **init_method_kwargs)
+    conf: DictConfig = compose(config_name=config_name, **compose_kwargs)
+    # return BaseConfigurationInstance(**conf)
+    return conf
 
 
 def hydra_instantiate(args: DictConfig, **kwargs):
