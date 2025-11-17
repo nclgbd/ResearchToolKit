@@ -1,2 +1,3 @@
-# models: default-model
+# models: siglip
+model_name: siglip
 pretrained_model_id: google/medsiglip-448

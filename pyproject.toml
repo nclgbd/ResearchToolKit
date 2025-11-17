@@ -1,0 +1,104 @@
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rtk"
+version = "0.1.0"
+description = "General purpose toolkit for working with medical imaging data. Contains experiment management with Mlflow, Hydra, and AzureML."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "teddygu" }]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Medical Science Apps.",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "accelerate",
+    "datasets",
+    "mlflow",
+    "hydra-colorlog",
+    "hydra-core",
+    "huggingface-hub",
+    "imbalanced-learn",
+    "matplotlib",
+    "omegaconf",
+    "rich",
+    "rich-argparse",
+    "scikit-learn",
+    "timm",
+    "torch>=2.7.1",
+    "torchvision>=0.22.1",
+    "transformers==4.40.0",
+    "xlrd",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black",
+    "flake8",
+    "huggingface-hub[cli]",
+    "ipykernel",
+    "jupyter",
+    "mypy",
+    "pytest",
+    "pytest-cov",
+]
+azureml = ["azureml-sdk", "azureml-mlflow"]
+monai = ["monai", "nibabel", "pydicom", "itk"]
+
+[project.scripts]
+check-cuda = "scripts.check_cuda:main"
+
+[tool.setuptools]
+packages = ["rtk"]
+
+[tool.setuptools.package-data]
+rtk = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = ["--verbose", "--strict-markers", "--tb=short"]
+
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311"]
+exclude = '''
+/(
+    \.git
+  | \.venv
+  | \.pytest_cache
+  | __pycache__
+  | build
+  | dist
+  | \.egg-info
+)/
+'''
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+
+[tool.flake8]
+max-line-length = 100
+exclude = [
+    ".git",
+    "__pycache__",
+    ".pytest_cache",
+    ".vscode",
+    "build",
+    "dist",
+    "*.egg-info",
+]

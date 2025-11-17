@@ -16,6 +16,9 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 
 # huggingface
 from transformers import (
+    AutoConfig,
+    AutoProcessor,
+    PretrainedConfig,
     PreTrainedModel,
     ProcessorMixin,
     SiglipModel,
@@ -35,6 +38,16 @@ logger = get_logger(__name__)
 logging.set_verbosity_error()
 
 
+def load_hf_model(args: DictConfig, **kwargs):
+    pretrained_model_id = kwargs.get(
+        "pretrained_model_id", args.models.get("pretrained_model_id", "")
+    )
+    config: PretrainedConfig = AutoConfig.from_pretrained(pretrained_model_id, **kwargs)
+    model = PreTrainedModel(config=config)
+    processor = AutoProcessor.from_pretrained(model.name_or_path)
+    return model, processor
+
+
 class Encoder:
 
     def __init__(
@@ -46,12 +59,8 @@ class Encoder:
         **kwargs,
     ):
         self.args = args
-        self.model_name: str = kwargs.get(
-            "model_name", args.get("model_name", "biomed-clip")
-        )
-        self.data_dir: str = kwargs.get(
-            "data_dir", args.get("data_dir", os.getenv("DATA_DIR"))
-        )
+        self.model_name: str = kwargs.get("model_name", args.get("model_name", "biomed-clip"))
+        self.data_dir: str = kwargs.get("data_dir", args.get("data_dir", os.getenv("DATA_DIR")))
         self.model_args: dict = args.models[self.model_name]
         self.tokenizer = tokenizer
         self.processor = processor
@@ -82,16 +91,14 @@ class Encoder:
         # Preprocessed in val_transform_images
         if "clip" in self.model_name:
             images = [
-                Image.open(os.path.join(self.data_dir, p)).convert("RGB")
-                for p in image_paths
+                Image.open(os.path.join(self.data_dir, p)).convert("RGB") for p in image_paths
             ]
             inputs = torch.stack([self.processor(im) for im in images]).to("cuda")
             embeddings: torch.Tensor = self.model.encode_image(inputs)
             return embeddings
         if "siglip" in self.model_name:
             images = [
-                Image.open(os.path.join(self.data_dir, p)).convert("RGB")
-                for p in image_paths
+                Image.open(os.path.join(self.data_dir, p)).convert("RGB") for p in image_paths
             ]
             inputs = self.processor(images=images, return_tensors="pt").to("cuda")
             embeddings: torch.Tensor = self.model.get_image_features(**inputs)
@@ -102,9 +109,7 @@ def create_open_clip_model(args: DictConfig, **kwargs):
     model_name: str = kwargs.get("model_name", args.get("model_name", ""))
     model_args: dict = args.models[model_name]
     model_path: str = model_args["model_id"]
-    model, _, processor = open_clip.create_model_and_transforms(
-        model_path
-    )  # , output_dict=True)
+    model, _, processor = open_clip.create_model_and_transforms(model_path)  # , output_dict=True)
     model = model.to("cuda")
     tokenizer: open_clip.tokenizer.HFTokenizer = open_clip.get_tokenizer(
         model_path, context_length=model.context_length
@@ -150,15 +155,16 @@ def print_trainable_parameters(model: nn.Module):
     )
 
 
-def create_clip_model(args: DictConfig, return_processors=False, **kwargs):
+def create_clip_model(
+    args: DictConfig, return_processors=False, caption_column: str = "reports", **kwargs
+):
     data_dir: str = kwargs.get("data_dir", args.get("data_dir", os.getenv("DATA_DIR")))
-    caption_column: str = kwargs.get("caption_column", "reports")
     image_column: str = kwargs.get("image_column", "image_files")
     model_path: str = kwargs.get("model_path", args.models.model_path)
     pretrained: str = kwargs.get("pretrained", args.models.pretrained)
 
-    model, train_image_processor, val_image_processor = (
-        open_clip.create_model_and_transforms(model_path, pretrained=pretrained)
+    model, train_image_processor, val_image_processor = open_clip.create_model_and_transforms(
+        model_path, pretrained=pretrained
     )
     model.eval()
     tokenizer: open_clip.tokenizer.HFTokenizer = open_clip.get_tokenizer(
@@ -167,8 +173,7 @@ def create_clip_model(args: DictConfig, return_processors=False, **kwargs):
 
     def load_images_as_pil(examples: dict):
         images = [
-            Image.open(os.path.join(data_dir, image_file))
-            for image_file in examples[image_column]
+            Image.open(os.path.join(data_dir, image_file)) for image_file in examples[image_column]
         ]
         return images
 
