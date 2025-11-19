@@ -38,7 +38,7 @@ dependencies = [
     "timm",
     "torch>=2.7.1",
     "torchvision>=0.22.1",
-    "transformers==4.40.0",
+    "transformers==4.56.1",
     "xlrd",
 ]
 
