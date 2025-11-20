@@ -36,9 +36,7 @@ def gather_runs_from_mlflow_experiment(experiment_name: str) -> list[str]:
     experiment_id = experiment.experiment_id
     runs = mlflow.search_runs(experiment_ids=[experiment_id])
     branches_to_delete = runs["run_id"].tolist()
-    branches_to_delete = list(
-        filter(lambda b: b not in exclude_branches, branches_to_delete)
-    )
+    branches_to_delete = list(filter(lambda b: b not in exclude_branches, branches_to_delete))
     console.log(f"Branches to delete from mlflow:\t{len(branches_to_delete)}")
     return branches_to_delete
 
@@ -62,9 +60,7 @@ def gather_pull_requests_from_huggingface(repo_id: str, repo_type: str):
     return pull_requests
 
 
-def close_pull_requests(
-    repo_id: str, pull_requests: list[str], repo_type: str, dry_run=True
-):
+def close_pull_requests(repo_id: str, pull_requests: list[str], repo_type: str, dry_run=True):
     total = len(pull_requests)
     for i, pr in enumerate(pull_requests):
         if dry_run:
@@ -88,9 +84,7 @@ def close_pull_requests(
     console.log(f"Deleted {total} branches.")
 
 
-def delete_revisions(
-    repo_id: str, mlflow_runs: list[str], repo_type: str = None, dry_run=True
-):
+def delete_revisions(repo_id: str, mlflow_runs: list[str], repo_type: str = None, dry_run=True):
     total = len(mlflow_runs)
     for i, run in enumerate(mlflow_runs):
         if dry_run:
@@ -133,9 +127,7 @@ def main(args: argparse.Namespace):
         console.log(
             f"The {MAIN_BRANCH_NAME} branch was detected in the list of branches to delete. This is [red]dangerous[/red]... are you sure you want to delete it?"
         )
-        response = console.input(
-            f"Type {MAIN_BRANCH_NAME} to delete {MAIN_BRANCH_NAME} branch?"
-        )
+        response = console.input(f"Type {MAIN_BRANCH_NAME} to delete {MAIN_BRANCH_NAME} branch?")
         if response.lower() != "main":
             console.log(
                 f"Invalid response. Removing {MAIN_BRANCH_NAME} from the list of branches to delete."
@@ -146,12 +138,8 @@ def main(args: argparse.Namespace):
             time.sleep(5)
 
     console.log(f"Items to delete:\t{items_to_delete}")
-    with console.status(
-        f"Attempting to delete a total of {len(items_to_delete)} items..."
-    ):
-        delete_revisions(
-            repo_id, mlflow_runs_to_delete, repo_type=repo_type, dry_run=dry_run
-        )
+    with console.status(f"Attempting to delete a total of {len(items_to_delete)} items..."):
+        delete_revisions(repo_id, mlflow_runs_to_delete, repo_type=repo_type, dry_run=dry_run)
         close_pull_requests(repo_id, hf_pr_to_delete, repo_type, dry_run=dry_run)
 
 
@@ -161,16 +149,12 @@ if __name__ == "__main__":
         Utility script for mass deleting dangling branches from 🤗 (HuggingFace). Partially automated using mlflow, as the runIDs are linked to a respective branch within 🤗.
         """
     )
-    argparser = argparse.ArgumentParser(
-        description=description, formatter_class=RichHelpFormatter
-    )
+    argparser = argparse.ArgumentParser(description=description, formatter_class=RichHelpFormatter)
     argparser.add_argument("-d", "--dry-run", action="store_true")
     argparser.add_argument("-e", "--experiment-name", default="default")
     argparser.add_argument("-r", "--repo-id", default=str())
     argparser.add_argument("-pr", "--include-pull-requests", action="store_true")
-    argparser.add_argument(
-        "-t", "--repo-type", default=str(), choices=["model", "dataset"]
-    )
+    argparser.add_argument("-t", "--repo-type", default=str(), choices=["model", "dataset"])
     args = argparser.parse_args()
     config = namespace_to_configuration(args)
     intro(config, title="MLflow and 🤗 Branch Deleter")
