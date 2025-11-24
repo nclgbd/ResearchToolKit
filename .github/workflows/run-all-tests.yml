@@ -10,6 +10,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }} 
     strategy:
       fail-fast: false
       matrix:
@@ -35,5 +37,3 @@ jobs:
           echo "Running pytest..."
           df -h /
           pytest -v
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
