@@ -35,3 +35,5 @@ jobs:
           echo "Running pytest..."
           df -h /
           pytest -v
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
