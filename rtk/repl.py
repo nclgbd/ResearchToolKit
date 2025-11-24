@@ -30,7 +30,11 @@ def prepare_console(**kwargs):
     from rtk.utils import login
 
     install(**kwargs)
-    ws = login()
+    try:
+        ws = login()
+    except Exception as e:
+        logger.error(f"Login failed: {e}")
+        ws = None
     console.clear()
 
     return ws, console

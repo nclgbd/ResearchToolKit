@@ -1,5 +1,5 @@
 """
-Tests for the `rtk.config` module.
+Tests for the `rtk.models` module.
 """
 
 import pytest
@@ -25,5 +25,5 @@ class TestModels:
         test_config: DictConfig,
     ):
         """Test the initialization of the Encoder class."""
-        ret = models.load_hf_model(test_config)
+        models.load_hf_model(test_config)
         assert True
