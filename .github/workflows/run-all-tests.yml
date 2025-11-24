@@ -10,8 +10,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      HF_TOKEN: ${{ secrets.HF_TOKEN }} 
     strategy:
       fail-fast: false
       matrix:
@@ -32,8 +30,12 @@ jobs:
         run: |
           echo "Installing rtk..."
           python -m pip install -e .
+          python -m pip install huggingface-hub[cli]
       - name: Test with pytest
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           echo "Running pytest..."
-          df -h /
+          echo $HF_TOKEN
+          hf auth login --token $HF_TOKEN
           pytest -v
