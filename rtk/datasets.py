@@ -44,12 +44,11 @@ CHEXAGENT_PREDICTION_LABELS = (
 
 
 def load_mimic_gt_data(positive_class: str = "Pneumonia") -> pd.DataFrame:
-    gt = (
-        load_dataset("vllm-pneumonia-detection/mimic-500-gt", split="test")
-        .to_pandas()[["dicom_id", positive_class]]
-        .set_index("dicom_id")
-    )
+    gt = load_dataset("vllm-pneumonia-detection/mimic-500-gt", split="test")
+    gt = gt.to_pandas()
+    gt = gt[["dicom_id", "image_files", "reports", positive_class]]
     gt["y_true"] = gt[positive_class].apply(lambda x: 1 if x == 1 else 0)
+    gt.drop(columns=[positive_class], inplace=True)
     return gt
 
 
@@ -59,9 +58,7 @@ def set_transforms(
 
     def _load_image_as_pil(examples: dict):
 
-        image_files = [
-            os.path.join(data_dir, image_file) for image_file in examples["image_files"]
-        ]
+        image_files = [os.path.join(data_dir, image_file) for image_file in examples["image_files"]]
         images = [Image.open(image_file).convert("RGB") for image_file in image_files]
         return images
 
