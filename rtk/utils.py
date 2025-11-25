@@ -51,9 +51,7 @@ def get_console(**kwargs) -> Console:
 _console = get_console()
 
 
-def intro(
-    args: DictConfig, title: str = "SigLIP Training", console: Console = _console
-):
+def intro(args: DictConfig, title: str = "", console: Console = _console):
 
     env_file = args.get("env_file", "../.env")
     load_dotenv(env_file)
