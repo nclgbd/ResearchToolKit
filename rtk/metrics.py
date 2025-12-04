@@ -3,6 +3,7 @@ import mlflow as MLflow
 import numpy as np
 import os
 import pandas as pd
+import warnings
 from omegaconf import DictConfig
 from rich.markdown import Markdown
 from tabulate import tabulate
@@ -10,6 +11,9 @@ from typing import List, Union
 
 # sklearn
 from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score
+
+# irmetrics
+from irmetrics import topk
 
 # huggingface
 from transformers import TrainerState
@@ -20,6 +24,20 @@ from rtk.utils import get_console, get_logger
 METRICS_DIR = "metrics"
 console = get_console()
 logger = get_logger(__name__, level=logging.INFO)
+warnings.filterwarnings("ignore", category=RuntimeWarning)
+
+
+def retrieval_at_k(y_true: np.ndarray, retrieved_labels: np.ndarray, k: int, suffix: str = ""):
+    metrics = {}
+    rr = topk.rr(y_true, retrieved_labels, k=k).mean()
+    ap = topk.ap(y_true, retrieved_labels, k=k).mean()
+    ndcg = topk.ndcg(y_true, retrieved_labels, k=k).mean()
+    ndcg = ndcg if not np.isnan(ndcg) else 0.0
+    metrics[f"mrr{suffix}:k"] = round(rr, 4)
+    metrics[f"map{suffix}:k"] = round(ap, 4)
+    metrics[f"ndcg{suffix}:k"] = round(ndcg, 4)
+
+    return metrics
 
 
 def recall_at_k(y_true: int, retrieved_labels: list, k: int) -> float:
@@ -159,9 +177,7 @@ def generate_classification_report(
     console.print(Markdown("## Confusion Matrix"))
     cfm = confusion_matrix(y_true, y_pred, labels=labels)
     console.print(
-        tabulate(
-            cfm, headers=target_names, showindex=target_names, tablefmt="rounded_grid"
-        )
+        tabulate(cfm, headers=target_names, showindex=target_names, tablefmt="rounded_grid")
     )
     if log:
         subfolder = curr_step if split == "" else f"{split}/{positive_class}"
