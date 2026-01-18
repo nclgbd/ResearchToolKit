@@ -1,35 +1,37 @@
 import os
 import pandas as pd
 
-# rtk
-from rtk.utils import get_logger, get_console
+# azureml
+from azure.ai.ml import MLClient
+from azure.identity import DefaultAzureCredential
 
-logger = get_logger(__name__)
-console = get_console()
+# rtk
+from rtk import console
+from rtk.utils import get_logger
+
+logger = get_logger(__name__, console=console)
 
 
 def login(
     from_config=True,
     **kwargs,
 ):
-    """
-    Login to AzureML workspace. If path is provided, will load from the specified config file.
-
-    ## Args:
-    * `from_config` (`bool`, optional): Whether to load from config file or provide the `subscription_id`. Defaults to `True`.
-    * `kwargs` (`dict`): Keyword arguments for `Workspace()`.
-
-    ## Returns:
-    * `Workspace`: AzureML workspace object.
-    """
-    from azureml.core import Workspace
-    from azureml.core.dataset import Dataset
-
     if from_config:
-        ws = Workspace.from_config()
+        try:
+            azml = MLClient.from_config(credential=DefaultAzureCredential())
+            logger.info("Successfully connected to the Azure ML workspace.")
+        except Exception as e:
+            logger.error(f"Connection failed: {e}")
 
     else:
-        ws = Workspace(**kwargs)
+        raise NotImplementedError("Manual login not implemented yet.")
 
-    logger.debug("Workspace: {}".format(ws.name))
-    return ws
+    return azml
+
+
+def get_azml_client(azml: MLClient = login()):
+    """Get Azure ML client using default credentials and config file."""
+    mlflow_tracking_uri = azml.workspaces.get(azml.workspace_name).mlflow_tracking_uri
+
+    logger.debug(f"Azure MLflow Tracking URI: {mlflow_tracking_uri}")
+    return azml

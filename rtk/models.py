@@ -25,16 +25,14 @@ from transformers import (
     logging,
 )
 
-
 # open clip
 import open_clip
 
 # rtk
-from rtk import DEFAULT_MODEL_PATH
-from rtk.utils import get_console, get_logger
+from rtk import DEFAULT_MODEL_PATH, console
+from rtk.utils import get_logger
 
-console = get_console()
-logger = get_logger(__name__)
+logger = get_logger(__name__, console=console)
 logging.set_verbosity_error()
 
 

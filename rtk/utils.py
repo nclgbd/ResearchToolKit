@@ -14,7 +14,6 @@ from dotenv import load_dotenv
 from logging import Logger
 from omegaconf import DictConfig, OmegaConf
 from rich.console import Console
-from rich.logging import RichHandler
 from rich.markdown import Markdown
 
 # hydra
@@ -23,35 +22,9 @@ from hydra.core.global_hydra import GlobalHydra
 
 
 # LOGGING_DIR = "logs"
-LOG_TIME_FORMAT = "[%X]".strip()
-COLOR_LOGGER_FORMAT: logging.Formatter = ColoredFormatter(
-    fmt="%(name)s - %(message)s".strip(),
-    reset=False,
-)
-# Color settings
-rich_handler = RichHandler(
-    # rich_tracebacks=True,
-    # console=console,
-    log_time_format=LOG_TIME_FORMAT,
-)
-rich_handler.setFormatter(COLOR_LOGGER_FORMAT)
 
 
-def get_console(**kwargs) -> Console:
-    """
-    Gets the rich console object.
-
-    ## Returns:
-    * `Console`: Rich console object.
-
-    """
-    return Console(record=True, **kwargs)
-
-
-_console = get_console()
-
-
-def intro(args: DictConfig, title: str = "", console: Console = _console):
+def intro(args: DictConfig, title: str = "", console: Console = None):
 
     env_file = args.get("env_file", "../.env")
     load_dotenv(env_file)
@@ -67,6 +40,17 @@ def intro(args: DictConfig, title: str = "", console: Console = _console):
     ).strip()
     console.print(Markdown(config_str))
     return config_str
+
+
+def get_console(**kwargs) -> Console:
+    """
+    Gets the rich console object.
+
+    ## Returns:
+    * `Console`: Rich console object.
+
+    """
+    return Console(record=True, **kwargs)
 
 
 def get_logger(

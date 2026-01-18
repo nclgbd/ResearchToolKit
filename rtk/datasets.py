@@ -19,9 +19,10 @@ from torchvision.transforms import (
 from datasets import Dataset, DatasetDict, load_dataset
 
 # rtk
+from rtk import console
 from rtk.utils import get_logger
 
-logger = get_logger(__name__)
+logger = get_logger(__name__, console=console)
 MIMIC_CLASS_NAMES = [
     "Atelectasis",
     "Cardiomegaly",

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rtk"
-version = "0.1.0"
+version = "0.1.1"
 description = "General purpose toolkit for working with medical imaging data. Contains experiment management with Mlflow, Hydra, and AzureML."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -53,7 +53,7 @@ dev = [
     "pytest",
     "pytest-cov",
 ]
-azureml = ["azureml-sdk", "azureml-mlflow"]
+azureml = ["azure-ai-ml", "azure-identity"]
 monai = ["monai", "nibabel", "pydicom", "itk"]
 
 [project.scripts]

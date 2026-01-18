@@ -19,11 +19,11 @@ from irmetrics import topk
 from transformers import TrainerState
 
 # rtk
-from rtk.utils import get_console, get_logger
+from rtk import console
+from rtk.utils import get_logger
 
 METRICS_DIR = "metrics"
-console = get_console()
-logger = get_logger(__name__, level=logging.INFO)
+logger = get_logger(__name__, console=console)
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 
@@ -31,11 +31,8 @@ def retrieval_at_k(y_true: np.ndarray, retrieved_labels: np.ndarray, k: int, suf
     metrics = {}
     rr = topk.rr(y_true, retrieved_labels, k=k).mean()
     ap = topk.ap(y_true, retrieved_labels, k=k).mean()
-    ndcg = topk.ndcg(y_true, retrieved_labels, k=k).mean()
-    ndcg = ndcg if not np.isnan(ndcg) else 0.0
-    metrics[f"mrr{suffix}:k"] = round(rr, 4)
-    metrics[f"map{suffix}:k"] = round(ap, 4)
-    metrics[f"ndcg{suffix}:k"] = round(ndcg, 4)
+    metrics[f"mrr{suffix}"] = round(rr, 4)
+    metrics[f"map{suffix}"] = round(ap, 4)
 
     return metrics
 

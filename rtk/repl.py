@@ -6,10 +6,10 @@ from dotenv import load_dotenv
 from rich import pretty, traceback
 from rich import inspect as rich_inspect
 
-from rtk.utils import get_console, get_logger
+from rtk import console
+from rtk.utils import get_logger
 
-logger = get_logger(__name__)
-console = get_console()
+logger = get_logger(__name__, console=console)
 
 
 def install(
