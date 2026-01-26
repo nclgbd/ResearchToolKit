@@ -2,6 +2,7 @@
 import numpy as np
 import os
 import pandas as pd
+import re
 from PIL import Image
 
 # torch
@@ -42,6 +43,33 @@ MIMIC_CLASS_NAMES = [
 CHEXAGENT_PREDICTION_LABELS = (
     "/data/nicoleg/workspaces/dissertation/.data/CHEXAGENT_PREDICTION_LABELS.txt"
 )
+
+
+def extract_indication(report: str) -> str:
+    """
+    Extract the INDICATION section from a radiology report.
+
+    Args:
+        report: A string containing the radiology report text
+
+    Returns:
+        The indication text, stripped of extra whitespace, or an empty string if not found
+    """
+    # Pattern to match indication-like sections, capturing text until the next section header
+    # Matches: INDICATION, REASON FOR EXAMINATION, HISTORY, CLINICAL INFORMATION
+    # Stops at: blank line, line starting with uppercase section header + colon, or end of string
+    logger.debug(f"Report:\n{report}\n")
+    pattern = r"(?:HISTORY|INDICATION|REASON FOR EXAM|REASON FOR EXAMINATION|CLINICAL INFORMATION):\s*(.*?)(?=\n[ \t]*\n|\n\s*[A-Z]{2,}:|\Z)"
+    match = re.search(pattern, report.strip(), re.DOTALL)
+
+    if match:
+        indication = match.group(1).strip()
+        indication = re.sub(r"\s+", " ", indication)  # Normalize whitespace
+        indication = indication.replace("\n", " ").strip()
+        logger.debug(f"Extracted Indication:\n{indication}\n{'='*40}")
+        return indication
+
+    return ""
 
 
 def load_mimic_gt_data(positive_class: str = "Pneumonia") -> pd.DataFrame:
