@@ -24,6 +24,45 @@ from hydra.core.global_hydra import GlobalHydra
 # LOGGING_DIR = "logs"
 
 
+def setup_torch_backends():
+    """
+    Configure PyTorch backends for optimal performance on Blackwell GPUs.
+
+    Optimizations:
+    - TF32: Enables TensorFloat-32 for matrix multiplications, providing ~3x speedup
+      with minimal precision loss. Blackwell architecture has dedicated TF32 cores.
+    - cuDNN benchmark: Runs multiple convolution algorithms to find the fastest one.
+      Best when input sizes are consistent (as in this retrieval pipeline).
+    - Flash/Memory-efficient attention: Uses optimized SDPA kernels when available.
+    """
+    import torch
+
+    # Enable TF32 for matmuls (significant speedup on Ampere/Blackwell architecture)
+    # TF32 uses 19 bits (10 mantissa) vs FP32's 32 bits, ~3x faster with <0.1% precision loss
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
+
+    # Enable cuDNN autotuner - benchmarks algorithms to find fastest for given input sizes
+    # First iteration is slower (benchmarking), subsequent iterations are faster
+    torch.backends.cudnn.benchmark = True
+
+    # Disable deterministic mode for maximum performance
+    # Set to True if exact reproducibility is required
+    torch.backends.cudnn.deterministic = False
+
+    # Enable optimized Scaled Dot-Product Attention kernels
+    # Flash Attention: O(N) memory instead of O(N²), faster for long sequences
+    # Memory-efficient: Good fallback when Flash Attention constraints aren't met
+    torch.backends.cuda.enable_flash_sdp(True)
+    torch.backends.cuda.enable_mem_efficient_sdp(True)
+
+    logger.info(
+        f"PyTorch backends configured: TF32={torch.backends.cuda.matmul.allow_tf32}, "
+        f"cuDNN benchmark={torch.backends.cudnn.benchmark}, "
+        f"Flash SDP=enabled"
+    )
+
+
 def intro(args: DictConfig, title: str = "", console: Console = None):
 
     env_file = args.get("env_file", "../.env")

@@ -4,9 +4,12 @@ import os
 import pandas as pd
 import re
 from PIL import Image
+from dotenv import load_dotenv
+from omegaconf import DictConfig
 
 # torch
 import torch
+import torch.linalg as L
 from torchvision.transforms import (
     Compose,
     Normalize,
@@ -17,10 +20,11 @@ from torchvision.transforms import (
 )
 
 # 🤗
-from datasets import Dataset, DatasetDict, load_dataset
+from datasets import Dataset, DatasetDict, load_dataset, load_from_disk
 
 # rtk
 from rtk import console
+from rtk.models import Encoder
 from rtk.utils import get_logger
 
 logger = get_logger(__name__, console=console)
@@ -40,9 +44,75 @@ MIMIC_CLASS_NAMES = [
     "Pneumothorax",
     "Support Devices",
 ]
-CHEXAGENT_PREDICTION_LABELS = (
-    "/data/nicoleg/workspaces/dissertation/.data/CHEXAGENT_PREDICTION_LABELS.txt"
-)
+DTYPE = torch.bfloat16
+EMBED_COLUMN = "embeddings"
+
+load_dotenv()
+
+
+def set_custom_clip_embeddings(
+    args: DictConfig, dataset: Dataset, model: Encoder, batch_size=16, **kwargs
+) -> Dataset:
+    retrieval_modality: str = kwargs.get("retrieval_modality", args.retrieval_modality)
+    embed_column = kwargs.get("embed_column", EMBED_COLUMN)
+
+    def process(sample: dict):
+        if retrieval_modality not in ["image", "text", "indication"]:
+            raise ValueError(
+                f"Invalid retrieval_modality: '{retrieval_modality}'. Must be 'image', 'text', or 'indication'."
+            )
+        if retrieval_modality == "image":
+            encode_func = model.encode_images
+            input_data = sample["image_files"]
+        elif retrieval_modality in ["text", "indication"]:
+            encode_func = model.encode_text
+            input_data = sample["reports"]
+            if retrieval_modality == "indication":
+                input_data = [extract_indication(report) for report in input_data]
+        else:
+            raise NotImplementedError(f"Unsupported retrieval_modality: {retrieval_modality}")
+        embeds = encode_func(input_data)
+        embeds /= L.vector_norm(embeds, dim=1, keepdim=True)
+        sample[embed_column] = embeds
+        return sample
+
+    return dataset.map(process, batched=True, batch_size=batch_size, **kwargs)
+
+
+def save_tensor_memmap(tensor: torch.Tensor, filepath: str) -> None:
+    """
+    Save a tensor to disk using torch.save for efficient loading.
+
+    Args:
+        tensor: PyTorch tensor to save
+        filepath: Path to save the .pt file (without extension)
+    """
+    pt_path = f"{filepath}.pt"
+    torch.save(tensor.detach().cpu(), pt_path)
+
+
+def load_tensor_memmap(filepath: str, copy_to_memory: bool = True) -> torch.Tensor:
+    """
+    Load a tensor from disk using torch.load.
+
+    Args:
+        filepath: Path to the saved file (without extension)
+        copy_to_memory: If True, load into RAM; if False, use mmap (slower but saves RAM)
+
+    Returns:
+        PyTorch tensor
+    """
+    pt_path = f"{filepath}.pt"
+
+    if copy_to_memory:
+        # Load directly into RAM for faster access
+        tensor: torch.Tensor = torch.load(pt_path, map_location="cuda", weights_only=True)
+
+    else:
+        # Use memory-mapped loading to save RAM (slower access)
+        tensor = torch.load(pt_path, map_location="cpu", weights_only=True, mmap=True)
+    tensor = tensor.to(dtype=DTYPE)
+    return tensor
 
 
 def extract_indication(report: str) -> str:
