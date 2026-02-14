@@ -47,8 +47,6 @@ MIMIC_CLASS_NAMES = [
 DTYPE = torch.bfloat16
 EMBED_COLUMN = "embeddings"
 
-load_dotenv()
-
 
 def set_custom_clip_embeddings(
     args: DictConfig, dataset: Dataset, model: Encoder, batch_size=16, **kwargs
@@ -56,25 +54,34 @@ def set_custom_clip_embeddings(
     retrieval_modality: str = kwargs.get("retrieval_modality", args.retrieval_modality)
     embed_column = kwargs.get("embed_column", EMBED_COLUMN)
 
+    if retrieval_modality not in ["image", "text", "full"]:
+        raise ValueError(
+            f"Invalid retrieval_modality: '{retrieval_modality}'. Must be 'image', 'text', or 'full'."
+        )
+
     def process(sample: dict):
-        if retrieval_modality not in ["image", "text", "indication"]:
-            raise ValueError(
-                f"Invalid retrieval_modality: '{retrieval_modality}'. Must be 'image', 'text', or 'indication'."
-            )
-        if retrieval_modality == "image":
-            encode_func = model.encode_images
-            input_data = sample["image_files"]
-        elif retrieval_modality in ["text", "indication"]:
-            encode_func = model.encode_text
-            input_data = sample["reports"]
-            if retrieval_modality == "indication":
-                input_data = [extract_indication(report) for report in input_data]
+
+        if retrieval_modality in ["image", "text"]:
+            if retrieval_modality == "image":
+                encode_func = model.encode_images
+                input_data = sample["image_files"]
+            else:
+                encode_func = model.encode_text
+                input_data = sample["reports"]
+            embeds = encode_func(input_data)
+            embeds /= L.vector_norm(embeds, dim=1, keepdim=True)
+            sample[embed_column] = embeds
+            return sample
+        # concat both image and text embeddings for 'full' modality
         else:
-            raise NotImplementedError(f"Unsupported retrieval_modality: {retrieval_modality}")
-        embeds = encode_func(input_data)
-        embeds /= L.vector_norm(embeds, dim=1, keepdim=True)
-        sample[embed_column] = embeds
-        return sample
+            image_inputs = sample["image_files"]
+            text_inputs = sample["reports"]
+            image_embeds = model.encode_images(image_inputs)
+            text_embeds = model.encode_text(text_inputs)
+            embeds = torch.cat((image_embeds, text_embeds), dim=1)
+            embeds /= L.vector_norm(embeds, dim=1, keepdim=True)
+            sample[embed_column] = embeds
+            return sample
 
     return dataset.map(process, batched=True, batch_size=batch_size, **kwargs)
 

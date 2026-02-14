@@ -28,10 +28,26 @@ warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 
 def retrieval_at_k(y_true: np.ndarray, retrieved_labels: np.ndarray, k: int, suffix: str = ""):
+    """
+    Calculate retrieval metrics at k.
+
+    Args:
+        y_true: Ground truth labels for each query (shape: [n_queries])
+        retrieved_labels: Labels of retrieved items for each query (shape: [n_queries, n_retrieved])
+        k: Number of top results to consider
+        suffix: Suffix to append to metric names
+
+    Returns:
+        Dictionary containing mean mAP, mRR, nDCG
+    """
     metrics = {}
+
+    # Mean Reciprocal Rank (MRR)
     rr = topk.rr(y_true, retrieved_labels, k=k).mean()
-    ap = topk.ap(y_true, retrieved_labels, k=k).mean()
     metrics[f"mrr{suffix}"] = round(rr, 4)
+
+    # Mean Average Precision (MAP)
+    ap = topk.ap(y_true, retrieved_labels, k=k).mean()
     metrics[f"map{suffix}"] = round(ap, 4)
 
     return metrics
