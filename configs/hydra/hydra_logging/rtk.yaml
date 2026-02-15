@@ -1,0 +1,19 @@
+formatters:
+  color_formatter:
+    (): colorlog.ColoredFormatter
+    # format: "%(name)s - %(message)s"
+    format: "[%(asctime)s][%(name)s][%(levelname)s] - %(message)s"
+    log_colors:
+      DEBUG: "cyan"
+      INFO: "green"
+      WARNING: "yellow"
+      ERROR: "red"
+      CRITICAL: "bold_red"
+handlers:
+  console:
+    class: logging.StreamHandler
+    formatter: color_formatter
+root:
+  handlers: [console]
+  level: INFO
+disable_existing_loggers: true

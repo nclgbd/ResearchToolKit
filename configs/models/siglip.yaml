@@ -1,0 +1,3 @@
+# models: siglip
+model_name: siglip
+pretrained_model_id: google/siglip-base-patch16-224

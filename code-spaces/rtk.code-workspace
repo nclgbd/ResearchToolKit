@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": "../",
+			"name": "ResearchToolKit"
+		},
+		{
+			"name": "dissertation",
+			"path": "../../dissertation"
+		}
+	],
+	"settings": {}
+}

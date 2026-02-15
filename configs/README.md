@@ -1,26 +1,32 @@
-# `ttk.configs` README.md
+# `rtk.configs` README.md
 
 ## Hydra settings
 
-```yaml
-# python scripts/run_train.py --config-dir=$(pwd)/configs/ --config-name=CONFIG_NAME
+```bash
+CONFIG_NAME=""
+python scripts/run_train.py --config-dir=$(pwd)/configs/ --config-name=$CONFIG_NAME
+```
 
+```yaml
 defaults:
   - _self_
-  - datasets: ???
-  - job: test
-  - models: resnet-model
-
-  # module configurations
-  - ignite: ignite
-  - mlflow: local
-  - sklearn: classifier
-
-  # overrides:
-  - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog
+  - override hydra/job_logging: colorlog
 
-# hydra settings
+env_file: /data/nicoleg/workspaces/dissertation/.env
+name:
+dry_run: true
+push_to_hub: true
+date: ${now:%Y-%m-%d}
+timestamp: ${now:%H-%M-%S}
+dataset:
+data_dir: /data/nicoleg/datasets/physionet.org/files/mimic-cxr-jpg/2.1.0
+batched: false
+batch_size:
+positive_class: Pneumonia
+with_rank: false
+model_id:
+
 hydra:
   job:
     chdir: true

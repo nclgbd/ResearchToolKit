@@ -1,30 +1,25 @@
-# * rtk-job --config-dir=$(pwd)/configs/ --config-name=tests
-
 defaults:
   - _self_
-  - datasets: chest-xray14-dataset
-  - job: eval-diffusion
-  - models: ddpm-model
-  # module configurations
-  - ignite: ignite
-  - mlflow: local
-  - sklearn: classifier
-  # overrides:
-  # - override datasets/preprocessing: icu-preprocessing
-  - override hydra/job_logging: colorlog
+  - models: siglip
   - override hydra/hydra_logging: colorlog
+  - override hydra/job_logging: colorlog
 
+env_file: /data/nicoleg/workspaces/dissertation/.env
+name: tests
+dry_run: true
+push_to_hub: false
 date: ${now:%Y-%m-%d}
-postfix: "test"
 timestamp: ${now:%H-%M-%S}
+dataset_id:
+data_dir: /data/nicoleg/datasets/physionet.org/files/mimic-cxr-jpg/2.1.0
+batched: false
+batch_size: 1
+positive_class: Pneumonia
+with_rank: false
 
-# hydra settings
 hydra:
   job:
     chdir: true
-  searchpath:
-    - file:///home/nicoleg/workspaces/dissertation/configs
-    - file:///home/nicoleg/workspaces/rcg/config
   sweep:
     dir: outputs/${hydra.job.config_name}/${date}/${timestamp}
     subdir: ${hydra.job.override_dirname}

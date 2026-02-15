@@ -1,7 +1,8 @@
 ##!/usr/bin/env python
 import argparse
 import torch
-from rtk.repl import prepare_console
+from rtk import repl
+from rtk.utils import get_console
 
 
 # Check GPU Drivers and CUDA Version
@@ -38,7 +39,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Check CUDA and GPU drivers.")
     parser.add_argument("--device", help="The device to check", default="cuda:0")
     args = parser.parse_args()
-    ws, console = prepare_console()
+    repl.install()
+    console = get_console()
     console.print(f"Torch version: '{torch.__version__}'")
 
     if not torch.cuda.is_available():

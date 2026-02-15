@@ -10,42 +10,65 @@ import textwrap
 import yaml
 from argparse import Namespace
 from colorlog import ColoredFormatter
+from dotenv import load_dotenv
 from logging import Logger
 from omegaconf import DictConfig, OmegaConf
 from rich.console import Console
-from rich.logging import RichHandler
 from rich.markdown import Markdown
 
-
-__all__ = [
-    "_console",
-    # "_logger",
-    "COLOR_LOGGER_FORMAT",
-    "get_console",
-    "get_logger",
-]
-
-LOGGING_DIR = "logs"
-LOG_TIME_FORMAT = "[%X]".strip()
-COLOR_LOGGER_FORMAT: logging.Formatter = ColoredFormatter(
-    fmt="%(name)s - %(message)s".strip(),
-    # datefmt=LOG_TIME_FORMAT,
-    reset=False,
-)
+# hydra
+from hydra import compose, initialize_config_dir
+from hydra.core.global_hydra import GlobalHydra
 
 
-def intro(args: DictConfig, console: Console = Console()):
-    from huggingface_hub import login as hf_login
+# LOGGING_DIR = "logs"
 
-    # if args.get("hf_token", None):
-    #     hf_login(token=args.hf_token, skip_if_logged_in=True)
 
+def setup_torch_backends():
+    """
+    Configure PyTorch backends for optimal performance on Blackwell GPUs.
+
+    Optimizations:
+    - TF32: Enables TensorFloat-32 for matrix multiplications, providing ~3x speedup
+      with minimal precision loss. Blackwell architecture has dedicated TF32 cores.
+    - cuDNN benchmark: Runs multiple convolution algorithms to find the fastest one.
+      Best when input sizes are consistent (as in this retrieval pipeline).
+    - Flash/Memory-efficient attention: Uses optimized SDPA kernels when available.
+    """
+    import torch
+
+    # Enable TF32 for matmuls (significant speedup on Ampere/Blackwell architecture)
+    # TF32 uses 19 bits (10 mantissa) vs FP32's 32 bits, ~3x faster with <0.1% precision loss
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
+
+    # Enable cuDNN autotuner - benchmarks algorithms to find fastest for given input sizes
+    # First iteration is slower (benchmarking), subsequent iterations are faster
+    torch.backends.cudnn.benchmark = True
+
+    # Disable deterministic mode for maximum performance
+    # Set to True if exact reproducibility is required
+    torch.backends.cudnn.deterministic = False
+
+    # Enable optimized Scaled Dot-Product Attention kernels
+    # Flash Attention: O(N) memory instead of O(N²), faster for long sequences
+    # Memory-efficient: Good fallback when Flash Attention constraints aren't met
+    torch.backends.cuda.enable_flash_sdp(True)
+    torch.backends.cuda.enable_mem_efficient_sdp(True)
+
+    logger.info(
+        f"PyTorch backends configured: TF32={torch.backends.cuda.matmul.allow_tf32}, "
+        f"cuDNN benchmark={torch.backends.cudnn.benchmark}, "
+        f"Flash SDP=enabled"
+    )
+
+
+def intro(args: DictConfig, title: str = "", console: Console = None):
+
+    env_file = args.get("env_file", "../.env")
+    load_dotenv(env_file)
     console.clear()
-    console.print(Markdown("# SigLIP Training"))
-    # assert os.environ.get(
-    #     "HF_TOKEN", ""
-    # ), "Please set the `HF_TOKEN` environment variable."
-
+    console.print(Markdown(f"# {title}"))
     config_str = OmegaConf.to_yaml(args, resolve=True)
     console.print(Markdown("## Configuration\n\n"))
     config_str = textwrap.dedent(
@@ -55,6 +78,7 @@ def intro(args: DictConfig, console: Console = Console()):
         """
     ).strip()
     console.print(Markdown(config_str))
+    return config_str
 
 
 def get_console(**kwargs) -> Console:
@@ -65,21 +89,13 @@ def get_console(**kwargs) -> Console:
     * `Console`: Rich console object.
 
     """
-
-    # log_file = kwargs.get("file", None)
-    # if log_file:
-    #     file_io = open(log_file, "a")
-    #     kwargs["file"] = file_io
-    return kwargs.get("console", Console(record=True, **kwargs))
-
-
-_console = get_console()
+    return Console(record=True, **kwargs)
 
 
 def get_logger(
     name: str = None,
     level: int = logging.INFO,
-    console: Console = Console(),
+    console: Console = None,
 ) -> Logger:
     """
     Function to get a logger with a `RichHandler`. Sets up the logger with a custom format and a `StreamHandler`.
@@ -95,42 +111,51 @@ def get_logger(
     logger: Logger = logging.getLogger(name)
     logger.setLevel(level=level)
 
-    # File settings
-    # curr_dir = os.getcwd()
-    # os.makedirs("logs", exist_ok=True)
-    # file_handler = logging.FileHandler(f"logs/{name}.log")
-    # file_handler.setFormatter(COLOR_LOGGER_FORMAT)
-    # logger.addHandler(file_handler)
-
-    # Color settings
-    rich_handler = RichHandler(
-        # rich_tracebacks=True,
-        # console=console,
-        level=level,
-        log_time_format=LOG_TIME_FORMAT,
-    )
-    rich_handler.setFormatter(COLOR_LOGGER_FORMAT)
-    logger.addHandler(rich_handler)
-    logger.propagate = False
-
     return logger
 
 
-def hydra_instantiate(cfg: DictConfig, **kwargs):
+logger = get_logger(__name__)
+
+
+def set_hydra_configuration(
+    config_name: str,
+    # BaseConfigurationInstance: DictConfig,
+    init_method: callable = initialize_config_dir,
+    init_method_kwargs: dict = {},
+    **compose_kwargs,
+) -> DictConfig:
+    """
+    Creates and returns a hydra configuration.
+
+    ## Args:
+    * `config_name` (`str`): The name of the config (usually the file name without the .yaml extension).
+    * `init_method` (`function`, optional): The initialization method to use. Should be either [`initialize`, `initialize_config_module`, `initialize_config_dir`].
+    Defaults to `initialize_config_dir`.
+    * `init_method_kwargs` (`dict`, optional): Keyword arguments for the `init_method` function.
+    * `compose_kwargs` (`dict`, optional): Keyword arguments for the `compose` function.
+
+    ## Returns:
+    * `DictConfig`: The hydra configuration.
+    """
+    logger.info(f"Creating configuration: '{config_name}'\n")
+    GlobalHydra.instance().clear()
+    init_method(version_base="1.1", **init_method_kwargs)
+    conf: DictConfig = compose(config_name=config_name, **compose_kwargs)
+    # return BaseConfigurationInstance(**conf)
+    return conf
+
+
+def hydra_instantiate(args: DictConfig, **kwargs):
     """
     Instantiates an object from a configuration.
 
     ## Args:
-    * `cfg` (`DictConfig`): The Hydra config.
+    * `args` (`DictConfig`): The Hydra config.
     * `**kwargs`: Keyword arguments for the object.
     ## Returns:
     * `Any`: The instantiated class.
     """
-    # target_class_name = cfg["_target_"].split(".")[-1]
-    # _logger.debug(
-    #     "Instantiating object '{}' from configuration".format(target_class_name)
-    # )
-    return hydra.utils.instantiate(cfg, **kwargs)
+    return hydra.utils.instantiate(args, **kwargs)
 
 
 def yaml_to_namespace(yaml_file: os.PathLike):
@@ -154,11 +179,12 @@ def yaml_to_configuration(file_path: str):
     return cfg
 
 
+def namespace_to_configuration(namespace: Namespace):
+    return DictConfig(vars(namespace))
+
+
 def strip_target(_dict: dict, lower=False):
     target_name: str = _dict["_target_"].split(".")[-1]
     if lower:
         target_name = target_name.lower()
     return target_name
-
-
-# _logger = get_logger(__name__)
