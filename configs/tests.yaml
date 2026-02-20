@@ -21,6 +21,15 @@ tags:
   comment: ""
   mlflow.note.content: ""
 
+model_name: biomed-clip # biomed-clip, med-siglip, xray-siglip
+fm_model_name: chexagent
+models:
+  biomed-clip:
+    model_id: hf-hub:microsoft/BiomedCLIP-PubMedBERT_256-vit_base_patch16_224
+  med-siglip:
+    model_id: google/medsiglip-448
+  xray-siglip:
+    model_id: StanfordAIMI/XraySigLIP__vit-b-16-siglip-512__webli
 hydra:
   job:
     chdir: true
