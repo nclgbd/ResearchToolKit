@@ -23,6 +23,7 @@ classifiers = [
 dependencies = [
     "accelerate",
     "datasets",
+    "faiss-gpu-cu12",
     "huggingface-hub",
     "hydra-colorlog",
     "hydra-core",
@@ -36,9 +37,9 @@ dependencies = [
     "scikit-learn",
     "sentencepiece",
     "timm",
-    "torch",
+    "torch>=2.1.2,<2.9.0",
     "torchvision",
-    "transformers>=4.40.0",
+    "transformers>=4.40.0,<5.0.0",
     "xlrd",
 ]
 
@@ -96,11 +97,11 @@ ignore_missing_imports = true
 [tool.flake8]
 max-line-length = 100
 exclude = [
+    "*.egg-info",
     ".git",
-    "__pycache__",
     ".pytest_cache",
     ".vscode",
+    "__pycache__",
     "build",
     "dist",
-    "*.egg-info",
 ]
