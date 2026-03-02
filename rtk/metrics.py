@@ -137,6 +137,148 @@ def f1_at_k(y_true: int, retrieved_labels: list, k: int) -> float:
     return (f1_p, f1_n)
 
 
+def generate_retrieval_report(
+    args: DictConfig = DictConfig({}), results: dict = {}, log: bool = False, **kwargs
+):
+    """
+    Generate evaluation report for different k values.
+    """
+    import pandas as pd
+    from tabulate import tabulate
+
+    k_values = [1, 2, 4, 8, 10]
+
+    if log:
+        MLflow.log_param("k_values", k_values)
+        MLflow.log_param("num_samples", len(results))
+
+    title = "# Retrieval VLM Report\n\n"
+    description = title
+
+    # Calculate irmetrics (mrr, map) for each k
+    pred_data = pd.DataFrame.from_records(results).T
+
+    # Calculate recall and precision metrics for each k
+    metrics_data = []
+
+    for k in k_values:
+        k_metric = {}
+        recalls_p = []
+        recalls_n = []
+        precisions_p = []
+        precisions_n = []
+        f1s_p = []
+        f1s_n = []
+
+        ## Negative
+        neg_pred_data = pred_data[pred_data["y_true"] == 0]
+        neg_true = neg_pred_data["y_true"].to_numpy(np.int32)
+        neg_pred = np.vstack(neg_pred_data["retrieved_labels"])
+        neg_pred = neg_pred.astype(np.int32)
+        neg_metrics = retrieval_at_k(neg_true, neg_pred, suffix="_n", k=k)
+        k_metric.update(neg_metrics)
+
+        ## Positive
+        pos_pred_data = pred_data[pred_data["y_true"] == 1]
+        pos_true = pos_pred_data["y_true"].to_numpy(np.int32)
+        pos_pred = np.vstack(pos_pred_data["retrieved_labels"])
+        pos_pred = pos_pred.astype(np.int32)
+        pos_metrics = retrieval_at_k(pos_true, pos_pred, suffix="_p", k=k)
+        k_metric.update(pos_metrics)
+
+        # Macro average
+        avg_mrr = (neg_metrics[f"mrr_n"] + pos_metrics[f"mrr_p"]) / 2
+        avg_map = (neg_metrics[f"map_n"] + pos_metrics[f"map_p"]) / 2
+        k_metric.update(
+            {
+                "map": round(avg_map, 4),
+                "mrr": round(avg_mrr, 4),
+            }
+        )
+
+        for _, data in results.items():
+            y_true: list = data["y_true"]
+            retrieved_labels: List[list] = data["retrieved_labels"]
+
+            recall_p, recall_n = recall_at_k(y_true, retrieved_labels, k)
+            precision_p, precision_n = precision_at_k(y_true, retrieved_labels, k)
+            f1_p, f1_n = f1_at_k(y_true, retrieved_labels, k)
+
+            # Only append non-None values
+            if recall_p is not None:
+                recalls_p.append(recall_p)
+            if recall_n is not None:
+                recalls_n.append(recall_n)
+
+            if precision_p is not None:
+                precisions_p.append(precision_p)
+            if precision_n is not None:
+                precisions_n.append(precision_n)
+
+            if f1_p is not None:
+                f1s_p.append(f1_p)
+            if f1_n is not None:
+                f1s_n.append(f1_n)
+
+        # Calculate mean metrics
+        mean_recall_p = sum(recalls_p) / len(recalls_p) if recalls_p else 0
+        mean_recall_n = sum(recalls_n) / len(recalls_n) if recalls_n else 0
+        mean_precision_p = sum(precisions_p) / len(precisions_p) if precisions_p else 0
+        mean_precision_n = sum(precisions_n) / len(precisions_n) if precisions_n else 0
+        mean_f1_p = sum(f1s_p) / len(f1s_p) if f1s_p else 0
+        mean_f1_n = sum(f1s_n) / len(f1s_n) if f1s_n else 0
+
+        macro_recall = (mean_recall_p + mean_recall_n) / 2
+        macro_precision = (mean_precision_p + mean_precision_n) / 2
+        macro_f1 = (mean_f1_p + mean_f1_n) / 2
+
+        k_metric.update(
+            {
+                f"f1": round(macro_f1, 4),
+                f"f1_n": round(mean_f1_n, 4),
+                f"f1_p": round(mean_f1_p, 4),
+                f"precision": round(macro_precision, 4),
+                f"precision_n": round(mean_precision_n, 4),
+                f"precision_p": round(mean_precision_p, 4),
+                f"recall": round(macro_recall, 4),
+                f"recall_n": round(mean_recall_n, 4),
+                f"recall_p": round(mean_recall_p, 4),
+            }
+        )
+        if log:
+            MLflow.log_metrics(
+                k_metric,
+                step=k,
+            )
+        k_metric["k"] = k
+        metrics_data.append(k_metric)
+
+    # Save metrics to CSV
+    metrics_df = pd.DataFrame(metrics_data).set_index("k")
+    metrics_df = metrics_df.sort_index()
+    metrics_df_string = tabulate(
+        metrics_df.T, headers="keys", showindex=True, tablefmt="fancy_grid"
+    )
+    description += f"```\n{metrics_df_string}"
+
+    model_name: str = kwargs.get("model_name", args.get("model_name", "model"))
+    retrieval_modality: str = kwargs.get(
+        "retrieval_modality", args.get("retrieval_modality", "vlm")
+    )
+    metrics_file = os.path.join(
+        METRICS_DIR, f"{model_name}_{retrieval_modality}_retrieval_report.csv"
+    )
+    metrics_df.to_csv(metrics_file)
+
+    logger.info(f"✓ Metrics saved to: {metrics_file}")
+    content = description + "\n"
+    console.print(Markdown(description))
+    if log:
+        MLflow.set_tag("mlflow.note.content", f"{content}```")
+
+    return metrics_df
+
+
 def generate_classification_report(
     y_true: Union[np.ndarray, pd.Series],
     y_pred: Union[np.ndarray, pd.Series],
