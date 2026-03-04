@@ -32,7 +32,7 @@ dependencies = [
     "jsonlines",
     "langfuse",
     "matplotlib",
-    "mlflow",
+    "mlflow==3.3.2",
     "omegaconf",
     "open_clip_torch",
     "rich==14.1.0",
