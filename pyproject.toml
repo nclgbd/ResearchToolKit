@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rtk"
-version = "0.1.1"
+version = "0.1.2"
 description = "General purpose toolkit for working with medical imaging data. Contains experiment management with Mlflow, Hydra, and AzureML."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -22,23 +22,28 @@ classifiers = [
 ]
 dependencies = [
     "accelerate",
+    "albumentations",
     "datasets",
+    "faiss-gpu-cu12",
     "huggingface-hub",
     "hydra-colorlog",
     "hydra-core",
-    "imbalanced-learn",
+    "ir-metrics",
+    "jsonlines",
+    "langfuse",
     "matplotlib",
-    "mlflow",
+    "mlflow==3.2.0",
     "omegaconf",
     "open_clip_torch",
-    "rich",
+    "python-dotenv",
     "rich-argparse",
+    "rich==14.1.0",
     "scikit-learn",
     "sentencepiece",
     "timm",
-    "torch",
+    "torch>=2.1.2,<2.9.0",
     "torchvision",
-    "transformers>=4.40.0",
+    "transformers>=4.40.0,<5.0.0",
     "xlrd",
 ]
 
@@ -96,11 +101,11 @@ ignore_missing_imports = true
 [tool.flake8]
 max-line-length = 100
 exclude = [
+    "*.egg-info",
     ".git",
-    "__pycache__",
     ".pytest_cache",
     ".vscode",
+    "__pycache__",
     "build",
     "dist",
-    "*.egg-info",
 ]

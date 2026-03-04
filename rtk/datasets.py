@@ -149,6 +149,83 @@ def extract_indication(report: str) -> str:
     return ""
 
 
+def extract_findings(report: str) -> str:
+    """
+    Extract the FINDINGS section from a radiology report.
+
+    Args:
+        report: A string containing the radiology report text
+
+    Returns:
+        The findings text, stripped of extra whitespace, or an empty string if not found
+    """
+    # Pattern to match findings-like sections, capturing text until the next section header
+    # Matches: FINDINGS, FINDINGS AND IMPRESSION, FINDINGS/IMPRESSION
+    # Stops at: blank line, line starting with uppercase section header + colon, or end of string
+    logger.debug(f"Report:\n{report}\n")
+    pattern = r"(?:FINDINGS|FINDING):\s*(.*?)(?=\n[ \t]*\n|\n\s*[A-Z]{2,}:|\Z)"
+    # report = re.sub(r"\n+", " ", report.strip())
+    match = re.search(pattern, report, re.DOTALL)
+
+    if match:
+        findings = match.group(1).strip()
+        findings = re.sub(r"\s+", " ", findings)  # Normalize whitespace
+        findings = findings.replace("\n", " ").strip()
+        logger.debug(f"Extracted Findings:\n{findings}\n{'='*40}")
+        return findings
+
+    return ""
+
+
+def extract_impression(report: str) -> str:
+    """
+    Extract the IMPRESSION section from a radiology report.
+
+    Args:
+        report: A string containing the radiology report text
+
+    Returns:
+        The impression text, stripped of extra whitespace, or an empty string if not found
+    """
+    # Pattern to match impression-like sections, capturing text until the next section header
+    # Matches: IMPRESSION, CONCLUSION, FINDINGS AND IMPRESSION
+    # Stops at: blank line, line starting with uppercase section header + colon, or end of string
+    logger.debug(f"Report:\n{report}\n")
+    pattern = r"(?:IMPRESSION|IMPRESSIONS|FINDINGS AND IMPRESSION|CONCLUSION):\s*(.*?)(?=\n[ \t]*\n|\n\s*[A-Z]{2,}:|\Z)"
+    report = re.sub(r"\n+", " ", report.strip())
+    match = re.search(pattern, report, re.DOTALL)
+
+    if match:
+        impression = match.group(1).strip()
+        impression = re.sub(r"\s+", " ", impression)  # Normalize whitespace
+        impression = impression.replace("\n", " ").strip()
+        logger.debug(f"Extracted Impression:\n{impression}\n{'='*40}")
+        return impression
+
+    return ""
+
+
+def extract_sections(report: str) -> dict:
+    """
+    Extract the INDICATION, FINDINGS, and IMPRESSION sections from a radiology report.
+
+    Args:
+        report: A string containing the radiology report text
+
+    Returns:
+        A dictionary with keys 'indication', 'findings', and 'impression' containing the respective extracted sections
+    """
+
+    indication = extract_indication(report)
+    findings = extract_findings(report)
+    impression = extract_impression(report)
+    conclusion = " ".join([findings, impression]).strip()
+    return {
+        "indication": indication,
+        "conclusion": conclusion,
+    }
+
+
 def load_mimic_gt_data(positive_class: str = "Pneumonia") -> pd.DataFrame:
     gt = load_dataset("vllm-pneumonia-detection/mimic-500-gt", split="test")
     gt = gt.to_pandas()

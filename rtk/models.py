@@ -46,6 +46,29 @@ def load_hf_model(args: DictConfig, **kwargs):
     return model, processor
 
 
+# class FMTokenEmbeddder:
+
+#     def __init__(
+#         self,
+#         args: DictConfig,
+#         model,
+#         processor: ProcessorMixin,
+#         tokenizer=None,
+#         **kwargs,
+#     ):
+#         self.args = args
+#         self.fm_model_name: str = kwargs.get("fm_model_name", args.get("fm_model_name", "chexagent"))
+#         self.data_dir: str = kwargs.get("data_dir", args.get("data_dir", os.getenv("DATA_DIR")))
+#         self.model = model
+#         self.model_args: dict = args.models[self.fm_model_name]
+        
+#     def text_token_embeddings(self, text):
+#         pass
+    
+#     def image_token_embeddings(self, image_paths):
+#         pass
+
+
 class Encoder:
 
     def __init__(

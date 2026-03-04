@@ -5,18 +5,31 @@ defaults:
   - override hydra/job_logging: colorlog
 
 env_file: /data/nicoleg/workspaces/dissertation/.env
-name: tests
+name: rtk
+experiment_name: ${name}-tests
 dry_run: true
 push_to_hub: false
 date: ${now:%Y-%m-%d}
 timestamp: ${now:%H-%M-%S}
-dataset_id:
+dataset: vllm-pneumonia-detection/mimic-cxr-labelled-dataset
 data_dir: /data/nicoleg/datasets/physionet.org/files/mimic-cxr-jpg/2.1.0
 batched: false
 batch_size: 1
-positive_class: Pneumonia
+positive_class: Pneumonia # Pneumonia,Effusion,Consolidation,Edema,Cardiomegaly,Atelectasis
 with_rank: false
+tags:
+  comment: ""
+  mlflow.note.content: ""
 
+model_name: biomed-clip # biomed-clip, med-siglip, xray-siglip
+fm_model_name: chexagent
+models:
+  biomed-clip:
+    model_id: hf-hub:microsoft/BiomedCLIP-PubMedBERT_256-vit_base_patch16_224
+  med-siglip:
+    model_id: google/medsiglip-448
+  xray-siglip:
+    model_id: StanfordAIMI/XraySigLIP__vit-b-16-siglip-512__webli
 hydra:
   job:
     chdir: true
