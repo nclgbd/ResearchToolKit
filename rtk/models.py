@@ -46,27 +46,12 @@ def load_hf_model(args: DictConfig, **kwargs):
     return model, processor
 
 
-# class FMTokenEmbeddder:
+def download_checkpoint_from_hugging_face(repo_id: str, filename: str) -> str:
+    from huggingface_hub import hf_hub_download
 
-#     def __init__(
-#         self,
-#         args: DictConfig,
-#         model,
-#         processor: ProcessorMixin,
-#         tokenizer=None,
-#         **kwargs,
-#     ):
-#         self.args = args
-#         self.fm_model_name: str = kwargs.get("fm_model_name", args.get("fm_model_name", "chexagent"))
-#         self.data_dir: str = kwargs.get("data_dir", args.get("data_dir", os.getenv("DATA_DIR")))
-#         self.model = model
-#         self.model_args: dict = args.models[self.fm_model_name]
-        
-#     def text_token_embeddings(self, text):
-#         pass
-    
-#     def image_token_embeddings(self, image_paths):
-#         pass
+    logger.info(f"Downloading checkpoint from Hugging Face hub for repo_id: {repo_id}")
+    checkpoint_path = hf_hub_download(repo_id=repo_id, subfolder="checkpoints", filename=filename)
+    return checkpoint_path
 
 
 class Encoder:
@@ -82,7 +67,7 @@ class Encoder:
         self.args = args
         self.model_name: str = kwargs.get("model_name", args.get("model_name", "biomed-clip"))
         self.data_dir: str = kwargs.get("data_dir", args.get("data_dir", os.getenv("DATA_DIR")))
-        self.model_args: dict = args.models[self.model_name]
+        self.model_args: dict = args.models
         self.tokenizer = tokenizer
         self.processor = processor
         self.model = model
@@ -127,10 +112,17 @@ class Encoder:
 
 
 def create_open_clip_model(args: DictConfig, **kwargs):
-    model_name: str = kwargs.get("model_name", args.get("model_name", ""))
-    model_args: dict = args.models[model_name]
-    model_path: str = model_args["model_id"]
-    model, _, processor = open_clip.create_model_and_transforms(model_path)  # , output_dict=True)
+    model_args: dict = args.models
+    model_path: str = model_args["model_path"]
+    pretrained: bool = model_args.get("pretrained", None)
+    if pretrained:
+        pretrained_kw = model_args["pretrained_weights"]
+        checkpoint_path = download_checkpoint_from_hugging_face(**pretrained_kw)
+        model, _, processor = open_clip.create_model_and_transforms(
+            model_path, pretrained=checkpoint_path
+        )
+    else:
+        model, _, processor = open_clip.create_model_and_transforms(model_path)
     model = model.to("cuda")
     tokenizer: open_clip.tokenizer.HFTokenizer = open_clip.get_tokenizer(
         model_path, context_length=model.context_length
@@ -142,16 +134,15 @@ def create_open_clip_model(args: DictConfig, **kwargs):
 
 
 def create_retrieval_model(args: DictConfig, **kwargs) -> Encoder:
-    model_name: str = kwargs.get("model_name", args.get("model_name", ""))
-    model_args: dict = args.models[model_name]
+    model_args: dict = args.models
+    model_name: str = kwargs.get("model_name", model_args.get("name", ""))
 
-    model_id = model_args["model_id"]
     if "clip" in model_name:
         return create_open_clip_model(args, **kwargs)
     if "siglip" in model_name:
         from transformers import SiglipProcessor
 
-        # tokenizer = None
+        model_id = model_args["model_id"]
         model: SiglipModel = SiglipModel.from_pretrained(model_id, device_map="cuda")
         processor = SiglipProcessor.from_pretrained(model_id)
 

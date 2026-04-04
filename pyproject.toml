@@ -24,6 +24,7 @@ dependencies = [
     "accelerate",
     "albumentations",
     "datasets",
+    "einops",
     "faiss-gpu-cu12",
     "huggingface-hub",
     "hydra-colorlog",
@@ -40,6 +41,7 @@ dependencies = [
     "rich==14.1.0",
     "scikit-learn",
     "sentencepiece",
+    "tabulate",
     "timm",
     "torch>=2.1.2,<2.9.0",
     "torchvision",
@@ -56,8 +58,8 @@ all = ["rtk[azureml,monai,qwen]"]
 [project.scripts]
 check-cuda = "scripts.check_cuda:main"
 
-[tool.uv]
-dev-dependencies = [
+[dependency-groups]
+dev = [
     "black",
     "flake8",
     "huggingface-hub[cli]",
@@ -66,6 +68,7 @@ dev-dependencies = [
     "mypy",
     "pytest",
     "pytest-cov",
+    "tabulate",
 ]
 
 [tool.uv.sources]
