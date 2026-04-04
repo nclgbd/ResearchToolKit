@@ -60,6 +60,7 @@ dev = [
 ]
 azureml = ["azure-ai-ml", "azure-identity"]
 monai = ["monai", "nibabel", "pydicom", "itk"]
+qwen = ["bitsandbytes", "qwen-vl-utils"]
 
 [project.scripts]
 check-cuda = "scripts.check_cuda:main"

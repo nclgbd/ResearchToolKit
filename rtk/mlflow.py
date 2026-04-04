@@ -53,7 +53,7 @@ class ExperimentCollection:
         token_modality: str = params["token_modality"]
         positive_class: str = params["positive_class"]
         report_baseline: bool = eval(params["report_baseline"])
-        use_context: bool = eval(params.get("use_context", "True"))
+        # use_context: bool = eval(params.get("use_context", "True"))
         use_filter: bool = eval(params.get("filter_sequence", "False"))
         use_self_dataset: bool = eval(params.get("uses_own_dataset", "True"))
         corpus_split: str = params.get("split", "test" if use_self_dataset else "train")
@@ -67,7 +67,7 @@ class ExperimentCollection:
                 positive_class,
             )
         else:
-            lambda_value = str(eval(params["sinkhorn"])["lmb"])
+            lambda_value = "0.3"  # str(eval(params.get("sinkhorn", {}).get("lmb", "0.3")))
 
             dst_path = os.path.join(
                 cache_dir,
@@ -77,11 +77,12 @@ class ExperimentCollection:
                 token_modality,
                 lambda_value,
             )
-        if use_context:
-            dst_path = os.path.join(dst_path, "context")
-            if "prompt" in params:
-                prompt_params = eval(params["prompt"])
-                dst_path = os.path.join(dst_path, prompt_params["name"], prompt_params["label"])
+
+        if "prompt" in params:
+            prompt_params = eval(params["prompt"])
+            dst_path = os.path.join(dst_path, prompt_params["name"], prompt_params["label"])
+        else:
+            dst_path = os.path.join(dst_path, "no-context-prompt", "initial")
 
         if use_filter:
             dst_path = os.path.join(dst_path, "token_filter")
