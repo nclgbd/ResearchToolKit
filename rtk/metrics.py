@@ -6,25 +6,40 @@ import pandas as pd
 import warnings
 from omegaconf import DictConfig
 from rich.markdown import Markdown
+from rich.progress import track
 from tabulate import tabulate
 from typing import List, Union
 
-# sklearn
-from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score
 
-# irmetrics
+# metrics
 from irmetrics import topk
+from sklearn.metrics import classification_report, confusion_matrix
+from spacy.util import logger
+
+logger.setLevel(logging.WARNING)
 
 # huggingface
 from transformers import TrainerState
 
+# report measures
+from RaTEScore import RaTEScore
+
+# from radgraph import F1RadGraph
+
+
 # rtk
 from rtk import console
+from rtk.datasets import extract_sections
 from rtk.utils import get_logger
 
 METRICS_DIR = "metrics"
 logger = get_logger(__name__, console=console)
 warnings.filterwarnings("ignore", category=RuntimeWarning)
+logging.getLogger("root").propagate = False
+logging.getLogger("root").disabled = True
+
+# f1radgraph = F1RadGraph(model_type="modern-radgraph-xl", reward_level="all")
+ratescore = RaTEScore()
 
 
 def retrieval_at_k(y_true: np.ndarray, retrieved_labels: np.ndarray, k: int, suffix: str = ""):
@@ -43,11 +58,11 @@ def retrieval_at_k(y_true: np.ndarray, retrieved_labels: np.ndarray, k: int, suf
     metrics = {}
 
     # Mean Reciprocal Rank (MRR)
-    rr = topk.rr(y_true, retrieved_labels, k=k).mean()
+    rr = np.mean(topk.rr(y_true, retrieved_labels, k=k))
     metrics[f"mrr{suffix}"] = round(rr, 4)
 
     # Mean Average Precision (MAP)
-    ap = topk.ap(y_true, retrieved_labels, k=k).mean()
+    ap = np.mean(topk.ap(y_true, retrieved_labels, k=k))
     metrics[f"map{suffix}"] = round(ap, 4)
 
     return metrics
@@ -163,6 +178,7 @@ def generate_retrieval_report(
 
     for k in k_values:
         k_metric = {}
+
         recalls_p = []
         recalls_n = []
         precisions_p = []
@@ -252,6 +268,21 @@ def generate_retrieval_report(
             )
         k_metric["k"] = k
         metrics_data.append(k_metric)
+
+    # Compute rate scores per query up front, then align with each k
+    all_rate_scores = []
+    for _, data in track(results.items(), description="Computing RaTEScores", total=len(results)):
+        candidates = data["retrieved_reports"]
+        references = [data["reports"]] * len(candidates)
+        cands = [extract_sections(c)["cleaned_report"] for c in candidates]
+        refs = [extract_sections(r)["cleaned_report"] for r in references]
+        all_rate_scores.append(ratescore.compute_score(cands, refs))
+
+    for i, k in enumerate(k_values):
+        mean_rate = float(np.mean([np.mean(scores[:k]) for scores in all_rate_scores]))
+        metrics_data[i]["rate"] = round(mean_rate, 4)
+        if log:
+            MLflow.log_metrics({"rate": metrics_data[i]["rate"]}, step=k)
 
     # Save metrics to CSV
     metrics_df = pd.DataFrame(metrics_data).set_index("k")

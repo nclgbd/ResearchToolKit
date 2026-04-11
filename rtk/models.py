@@ -65,7 +65,7 @@ class Encoder:
         **kwargs,
     ):
         self.args = args
-        self.model_name: str = kwargs.get("model_name", args.get("model_name", "biomed-clip"))
+        self.model_name: str = kwargs.get("model_name", args.get("model_name"))
         self.data_dir: str = kwargs.get("data_dir", args.get("data_dir", os.getenv("DATA_DIR")))
         self.model_args: dict = args.models
         self.tokenizer = tokenizer
@@ -87,21 +87,33 @@ class Encoder:
             embeddings = self.model.get_text_features(**inputs)
             return embeddings
 
-        if "clip" in self.model_name:
+        if "biomed" in self.model_name:
             inputs = self.tokenizer(text).to("cuda")
             embeddings = self.model.encode_text(inputs)
             return embeddings
 
+        if "medclip" in self.model_name:
+            inputs = self.processor(
+                text=text,
+                return_tensors="pt",
+                padding=True,
+                truncation=True,
+            ).to("cuda")
+            inputs.pop("token_type_ids")
+            embeddings = self.model.encode_text(**inputs)
+            return embeddings
+
     @torch.no_grad()
     def encode_images(self, image_paths: list) -> torch.Tensor:
-        # Preprocessed in val_transform_images
-        if "clip" in self.model_name:
+
+        if "biomed" in self.model_name:
             images = [
                 Image.open(os.path.join(self.data_dir, p)).convert("RGB") for p in image_paths
             ]
             inputs = torch.stack([self.processor(im) for im in images]).to("cuda")
             embeddings: torch.Tensor = self.model.encode_image(inputs)
             return embeddings
+
         if "siglip" in self.model_name:
             images = [
                 Image.open(os.path.join(self.data_dir, p)).convert("RGB") for p in image_paths
@@ -110,10 +122,69 @@ class Encoder:
             embeddings: torch.Tensor = self.model.get_image_features(**inputs)
             return embeddings
 
+        if "medclip" in self.model_name:
+            images = [Image.open(os.path.join(self.data_dir, p)) for p in image_paths]
+            inputs = self.processor(
+                images=images,
+                return_tensors="pt",
+                padding=True,
+                truncation=True,
+            ).to("cuda")
+            embeddings = self.model.encode_image(**inputs)
+            return embeddings
 
-def create_open_clip_model(args: DictConfig, **kwargs):
+    @torch.no_grad()
+    def encode(self, text, image_paths: list) -> torch.Tensor:
+        # Preprocessed in val_transform_images
+        if "biomed" in self.model_name:
+            image_embeddings = self.encode_images(image_paths)
+            text_embeddings = self.encode_text(text)
+            return image_embeddings, text_embeddings
+        if "siglip" in self.model_name:
+            image_embeddings = self.encode_images(image_paths)
+            text_embeddings = self.encode_text(text)
+            return image_embeddings, text_embeddings
+        if "medclip" in self.model_name:
+            if not isinstance(text, list):
+                text = [text]
+            images = [
+                Image.open(os.path.join(self.data_dir, p)).convert("RGB") for p in image_paths
+            ]
+            inputs = self.processor(
+                text=text,
+                images=images,
+                return_tensors="pt",
+                padding=False,
+            )
+            output = self.model(**inputs)
+            image_embeddings = output["img_embeds"]
+            text_embeddings = output["text_embeds"]
+            return image_embeddings, text_embeddings
+
+
+def _create_medclip_model(args: DictConfig, **kwargs):
+    from medclip import MedCLIPModel, MedCLIPProcessor
+
+    model_name: str = args.model_name
+    if model_name == "medclip-resnet":
+        from medclip import MedCLIPVisionModel
+
+        vision_cls = MedCLIPVisionModel
+    elif model_name == "medclip-vit":
+        from medclip import MedCLIPVisionModelViT
+
+        vision_cls = MedCLIPVisionModelViT
+    model = MedCLIPModel(vision_cls=vision_cls)
+    model.to("cuda").eval()
+    processor = MedCLIPProcessor()
+    encoder = Encoder(args, model, processor, **kwargs)
+
+    return encoder
+
+
+def _create_open_clip_model(args: DictConfig, **kwargs):
     model_args: dict = args.models
-    model_path: str = model_args["model_path"]
+    model_path: str = model_args["model_id"]
     pretrained: bool = model_args.get("pretrained", None)
     if pretrained:
         pretrained_kw = model_args["pretrained_weights"]
@@ -133,23 +204,29 @@ def create_open_clip_model(args: DictConfig, **kwargs):
     return encoder
 
 
+def _create_siglip_model(args: DictConfig, **kwargs):
+    from transformers import SiglipProcessor
+
+    model_args: dict = args.models
+    model_id: str = model_args["model_id"]
+    model: SiglipModel = SiglipModel.from_pretrained(model_id, device_map="cuda")
+    processor: SiglipProcessor = SiglipProcessor.from_pretrained(model_id)
+    model.eval()
+    encoder = Encoder(args, model, processor, **kwargs)
+
+    return encoder
+
+
 def create_retrieval_model(args: DictConfig, **kwargs) -> Encoder:
     model_args: dict = args.models
     model_name: str = kwargs.get("model_name", model_args.get("name", ""))
 
-    if "clip" in model_name:
-        return create_open_clip_model(args, **kwargs)
+    if "biomed" in model_name:
+        return _create_open_clip_model(args, **kwargs)
+    if "medclip" in model_name:
+        return _create_medclip_model(args, **kwargs)
     if "siglip" in model_name:
-        from transformers import SiglipProcessor
-
-        model_id = model_args["model_id"]
-        model: SiglipModel = SiglipModel.from_pretrained(model_id, device_map="cuda")
-        processor = SiglipProcessor.from_pretrained(model_id)
-
-        model.eval()
-        encoder = Encoder(args, model, processor, **kwargs)
-
-        return encoder
+        return _create_siglip_model(args, **kwargs)
 
 
 def print_trainable_parameters(model: nn.Module):

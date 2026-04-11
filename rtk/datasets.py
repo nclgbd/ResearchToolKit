@@ -205,6 +205,54 @@ def extract_impression(report: str) -> str:
     return ""
 
 
+# Section labels to strip from the report
+_SECTION_LABELS = re.compile(
+    r"^\s*(?:HISTORY|CLINICAL\s+INDICATION|INDICATION|REASON\s+FOR\s+EXAM(?:INATION)?|CLINICAL\s+INFORMATION|FINDINGS?|TECHNIQUE|COMPARISON|IMPRESSION)\s*:\s*",
+    re.IGNORECASE,
+)
+
+# All-caps header lines (no lowercase content, e.g. "FINAL REPORT", "SINGLE FRONTAL VIEW OF THE CHEST")
+_HEADER_LINE = re.compile(r"^[A-Z0-9][A-Z0-9\s\-\/\(\)\.,:]+$")
+
+
+def extract_report_text(report: str) -> str:
+    """
+    Extract paragraph text from a radiology report, removing:
+      - All-caps header lines (e.g. 'FINAL REPORT', 'SINGLE FRONTAL VIEW OF THE CHEST')
+      - Section label prefixes (HISTORY, CLINICAL INDICATION, REASON FOR EXAM, REASON FOR EXAMINATION,
+        CLINICAL INFORMATION, FINDINGS, FINDING, TECHNIQUE, COMPARISON)
+
+    Args:
+        report: Raw radiology report text
+    Returns:
+        Cleaned paragraph text as a single string
+    """
+    lines = report.splitlines()
+    paragraph_lines = []
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+
+        # Skip pure all-caps header lines (no lowercase at all)
+        if stripped == stripped.upper() and _HEADER_LINE.match(stripped):
+            continue
+
+        # Strip section label prefix if present; skip line if nothing remains after it
+        stripped = _SECTION_LABELS.sub("", stripped).strip()
+        if not stripped:
+            continue
+
+        paragraph_lines.append(stripped)
+
+    paragraph = " ".join(paragraph_lines)
+    paragraph = re.sub(r"\s+", " ", paragraph)  # Normalize whitespace
+    paragraph = paragraph.replace("\n", " ").strip()
+
+    return paragraph
+
+
 def extract_sections(report: str) -> dict:
     """
     Extract the INDICATION, FINDINGS, and IMPRESSION sections from a radiology report.
@@ -223,6 +271,7 @@ def extract_sections(report: str) -> dict:
     return {
         "indication": indication,
         "conclusion": conclusion,
+        "cleaned_report": extract_report_text(report),
     }
 
 
