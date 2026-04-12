@@ -21,11 +21,6 @@ logger.setLevel(logging.WARNING)
 # huggingface
 from transformers import TrainerState
 
-# report measures
-from RaTEScore import RaTEScore
-
-# from radgraph import F1RadGraph
-
 
 # rtk
 from rtk import console
@@ -37,9 +32,6 @@ logger = get_logger(__name__, console=console)
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 logging.getLogger("root").propagate = False
 logging.getLogger("root").disabled = True
-
-# f1radgraph = F1RadGraph(model_type="modern-radgraph-xl", reward_level="all")
-ratescore = RaTEScore()
 
 
 def retrieval_at_k(y_true: np.ndarray, retrieved_labels: np.ndarray, k: int, suffix: str = ""):
@@ -152,16 +144,61 @@ def f1_at_k(y_true: int, retrieved_labels: list, k: int) -> float:
     return (f1_p, f1_n)
 
 
+def calculate_rrg_metrics(
+    run_id: str,
+    metrics_data: pd.DataFrame,
+    results: dict,
+    k_values: list = [1, 2, 4, 8, 10],
+    log: bool = False,
+):
+    """
+    Calculate RRG metrics for a set of results at a given k."""
+
+    # report measures
+    from RaTEScore import RaTEScore
+    from radgraph import F1RadGraph
+
+    f1radgraph = F1RadGraph(model_type="modern-radgraph-xl", reward_level="all")
+    ratescore = RaTEScore()
+
+    # Compute rate scores per query up front, then align with each k
+    all_rate_scores = []
+    all_radgraph_scores = []
+    for _, data in track(results.items(), description="Computing RRG metrics", total=len(results)):
+        candidates = data["retrieved_reports"]
+        references = [data["reports"]] * len(candidates)
+        cands = [extract_sections(c)["cleaned_report"] for c in candidates]
+        refs = [extract_sections(r)["cleaned_report"] for r in references]
+        mean_reward, _, _, _ = f1radgraph(hyps=cands, refs=refs)
+
+        _, rg_er, _ = mean_reward
+        all_rate_scores.append(ratescore.compute_score(cands, refs))
+        all_radgraph_scores.append(rg_er)
+
+    # TODO: fix later if wrong (likely)
+    for k in k_values:
+        mean_rate = float(np.mean([np.mean(scores[:k]) for scores in all_rate_scores]))
+        metrics_data[run_id][k]["rate"] = round(mean_rate, 4)
+        if log:
+            MLflow.log_metrics({"rate": metrics_data[run_id][k]["rate"]}, step=k)
+        mean_radgraph = float(np.mean([np.mean(scores[:k]) for scores in all_radgraph_scores]))
+        metrics_data[run_id][k]["radgraph"] = round(mean_radgraph, 4)
+        if log:
+            MLflow.log_metrics({"radgraph": metrics_data[run_id][k]["radgraph"]}, step=k)
+
+
 def generate_retrieval_report(
-    args: DictConfig = DictConfig({}), results: dict = {}, log: bool = False, **kwargs
+    args: DictConfig = DictConfig({}),
+    results: dict = {},
+    log: bool = False,
+    k_values=[1, 2, 4, 8, 10],
+    **kwargs,
 ):
     """
     Generate evaluation report for different k values.
     """
     import pandas as pd
     from tabulate import tabulate
-
-    k_values = [1, 2, 4, 8, 10]
 
     if log:
         MLflow.log_param("k_values", k_values)
@@ -268,21 +305,6 @@ def generate_retrieval_report(
             )
         k_metric["k"] = k
         metrics_data.append(k_metric)
-
-    # Compute rate scores per query up front, then align with each k
-    all_rate_scores = []
-    for _, data in track(results.items(), description="Computing RaTEScores", total=len(results)):
-        candidates = data["retrieved_reports"]
-        references = [data["reports"]] * len(candidates)
-        cands = [extract_sections(c)["cleaned_report"] for c in candidates]
-        refs = [extract_sections(r)["cleaned_report"] for r in references]
-        all_rate_scores.append(ratescore.compute_score(cands, refs))
-
-    for i, k in enumerate(k_values):
-        mean_rate = float(np.mean([np.mean(scores[:k]) for scores in all_rate_scores]))
-        metrics_data[i]["rate"] = round(mean_rate, 4)
-        if log:
-            MLflow.log_metrics({"rate": metrics_data[i]["rate"]}, step=k)
 
     # Save metrics to CSV
     metrics_df = pd.DataFrame(metrics_data).set_index("k")
