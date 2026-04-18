@@ -39,6 +39,7 @@ dependencies = [
     "medclip>=0.0.3",
     "medspacy>=1.3.1",
     "mlflow==3.2.0",
+    "nibabel>=5.4.2",
     "numpy==1.26.*",
     "omegaconf",
     "open_clip_torch",
@@ -73,6 +74,7 @@ dev = [
 ]
 monai = ["monai", "nibabel", "pydicom", "itk"]
 qwen = ["bitsandbytes", "qwen-vl-utils"]
+radir = ["radir", "transformer-maskgit"]
 
 [project.scripts]
 check-cuda = "scripts.check_cuda:main"
@@ -80,6 +82,8 @@ check-cuda = "scripts.check_cuda:main"
 [tool.uv.sources]
 radgraph = { git = "https://github.com/Stanford-AIMI/radgraph" }
 rtk = { path = "../ResearchToolKit", editable = true }
+radir = { path = "../RadIR/Rad_IR", editable = true }
+transformer-maskgit = { path = "../RadIR/transformer_maskgit", editable = true }
 torch = { index = "pytorch-cu128" }
 torchvision = { index = "pytorch-cu128" }
 # Add any local or git dependencies here

@@ -60,8 +60,9 @@ class Encoder:
         self,
         args: DictConfig,
         model: PreTrainedModel,
-        processor: ProcessorMixin,
+        processor=None,
         tokenizer=None,
+        device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
         **kwargs,
     ):
         self.args = args
@@ -71,6 +72,7 @@ class Encoder:
         self.tokenizer = tokenizer
         self.processor = processor
         self.model = model
+        self.device = device
         logger.debug(f"Initialized Encoder with model: '{self.model_name}'")
 
     @torch.no_grad()
@@ -140,10 +142,12 @@ class Encoder:
             image_embeddings = self.encode_images(image_paths)
             text_embeddings = self.encode_text(text)
             return image_embeddings, text_embeddings
+
         if "siglip" in self.model_name:
             image_embeddings = self.encode_images(image_paths)
             text_embeddings = self.encode_text(text)
             return image_embeddings, text_embeddings
+
         if "medclip" in self.model_name:
             if not isinstance(text, list):
                 text = [text]
@@ -160,6 +164,88 @@ class Encoder:
             image_embeddings = output["img_embeds"]
             text_embeddings = output["text_embeds"]
             return image_embeddings, text_embeddings
+
+        if "radir" in self.model_name:
+            from rtk.datasets import load_2d_image_to_tensor
+
+            modality_dict = {"CT": 0, "CXR": 1}
+            if not isinstance(image_paths, list):
+                image_paths = [image_paths]
+            is_abs = os.path.isabs(image_paths[0])
+            if is_abs:
+                images = image_paths
+            else:
+                images = [os.path.join(self.data_dir, p) for p in image_paths]
+            image_tensors = [load_2d_image_to_tensor(image_path) for image_path in images]
+            batched_images = torch.stack(
+                image_tensors, dim=0
+            )  # [B, C, D, H, W] -> [2, 1, 1, 480, 480]
+            batched_images = batched_images.to(self.device)
+
+            text_tokens = self.tokenizer(
+                text, return_tensors="pt", padding="max_length", truncation=True, max_length=512
+            ).to(self.device)
+            logger.debug(text_tokens)
+
+            modal_indexs = torch.tensor([modality_dict["CXR"]] * len(image_paths)).to(self.device)
+
+            image_embeddings, text_embeddings, _, _ = self.model(
+                text_tokens,
+                image=batched_images,
+                device=self.device,
+                is_condition=False,
+                return_latents=True,
+                modal_indexs=modal_indexs,
+                modal_embedding=True,
+            )
+
+            return image_embeddings, text_embeddings
+
+
+def _create_radir_model(args: DictConfig, **kwargs):
+    from radir import RADIR
+    from transformer_maskgit import CTViT
+    from transformers import BertTokenizer, BertModel
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    model_args: dict = args.models
+    model_id: str = model_args["model_id"]
+    checkpoint_path: str = model_args["checkpoint_path"]
+    tokenizer = BertTokenizer.from_pretrained(model_id, do_lower_case=True)
+    text_encoder = BertModel.from_pretrained(model_id)
+    text_encoder = text_encoder.to(device)
+
+    image_encoder = CTViT(
+        dim=512,
+        codebook_size=8192,
+        image_size=480,
+        patch_size=20,
+        temporal_patch_size=10,
+        spatial_depth=8,
+        temporal_depth=6,
+        cls_depth=4,
+        dim_head=32,
+        heads=8,
+    ).to(device)
+
+    Rad_IR = RADIR(
+        image_encoder=image_encoder,
+        text_encoder=text_encoder,
+        tokenizer=tokenizer,
+        dim_text=768,
+        dim_image=512,
+        dim_latent=512,
+        extra_latent_projection=False,
+        use_mlm=False,
+        downsample_image_embeds=False,
+        use_all_token_embeds=False,
+    ).to(device)
+    Rad_IR.load(checkpoint_path)
+    Rad_IR.eval()
+
+    encoder = Encoder(args, Rad_IR, tokenizer=tokenizer)
+    return encoder
 
 
 def _create_medclip_model(args: DictConfig, **kwargs):
@@ -227,6 +313,8 @@ def create_retrieval_model(args: DictConfig, **kwargs) -> Encoder:
         return _create_medclip_model(args, **kwargs)
     if "siglip" in model_name:
         return _create_siglip_model(args, **kwargs)
+    if "radir" in model_name:
+        return _create_radir_model(args, **kwargs)
 
 
 def print_trainable_parameters(model: nn.Module):
