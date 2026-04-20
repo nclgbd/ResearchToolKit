@@ -2,14 +2,11 @@
 General utility functions. These are not specific to any deep learning framework, and therefore can be used in different contexts.
 """
 
-# imports
 import hydra
 import logging
 import os
-import textwrap
 import yaml
 from argparse import Namespace
-from colorlog import ColoredFormatter
 from dotenv import load_dotenv
 from logging import Logger
 from omegaconf import DictConfig, OmegaConf
@@ -21,18 +18,13 @@ from hydra import compose, initialize_config_dir
 from hydra.core.global_hydra import GlobalHydra
 
 
-# LOGGING_DIR = "logs"
-
-
 def setup_torch_backends():
     """
     Configure PyTorch backends for optimal performance on Blackwell GPUs.
 
     Optimizations:
-    - TF32: Enables TensorFloat-32 for matrix multiplications, providing ~3x speedup
-      with minimal precision loss. Blackwell architecture has dedicated TF32 cores.
-    - cuDNN benchmark: Runs multiple convolution algorithms to find the fastest one.
-      Best when input sizes are consistent (as in this retrieval pipeline).
+    - TF32: Enables TensorFloat-32 for matrix multiplications, providing ~3x speedup with minimal precision loss. Blackwell architecture has dedicated TF32 cores.
+    - cuDNN benchmark: Runs multiple convolution algorithms to find the fastest one. Best when input sizes are consistent (as in this retrieval pipeline).
     - Flash/Memory-efficient attention: Uses optimized SDPA kernels when available.
     """
     import torch
@@ -71,12 +63,7 @@ def intro(args: DictConfig, title: str = "", console: Console = None):
     console.print(Markdown(f"# {title}"))
     config_str = OmegaConf.to_yaml(args, resolve=True)
     console.print(Markdown("## Configuration\n\n"))
-    config_str = textwrap.dedent(
-        f"""
-        ```yaml
-{config_str}
-        """
-    ).strip()
+    config_str = f"```yaml\n{config_str}```"
     console.print(Markdown(config_str))
     return config_str
 
@@ -119,7 +106,6 @@ logger = get_logger(__name__)
 
 def set_hydra_configuration(
     config_name: str,
-    # BaseConfigurationInstance: DictConfig,
     init_method: callable = initialize_config_dir,
     init_method_kwargs: dict = {},
     **compose_kwargs,
@@ -141,7 +127,6 @@ def set_hydra_configuration(
     GlobalHydra.instance().clear()
     init_method(version_base="1.1", **init_method_kwargs)
     conf: DictConfig = compose(config_name=config_name, **compose_kwargs)
-    # return BaseConfigurationInstance(**conf)
     return conf
 
 
