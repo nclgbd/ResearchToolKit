@@ -551,7 +551,7 @@ def generate_classification_report(
         f"{split_prefix}macro_f1": cls["macro_f1"],
         f"{split_prefix}bal_acc": cls["bal_acc"],
         f"{split_prefix}mcc": cls["mcc"],
-        f"{split_prefix}acc": round(cr["acc"], 4),
+        # f"{split_prefix}acc": round(cr["acc"], 4),
     }
     index = curr_step
     summary = pd.DataFrame(summary_dict, index=[index])

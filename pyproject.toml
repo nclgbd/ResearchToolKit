@@ -44,6 +44,7 @@ dependencies = [
     "omegaconf",
     "open_clip_torch",
     "openpyxl>=3.1.5",
+    "pyarrow<21.0.0",
     "python-dotenv",
     "radgraph",
     "ratescore>=0.6.0",
@@ -55,7 +56,7 @@ dependencies = [
     "timm",
     "torch==2.7.1",
     "torchvision==0.22.1",
-    "transformers<5.0.0",
+    "transformers<=5.4.0",
     "xlrd",
 ]
 
