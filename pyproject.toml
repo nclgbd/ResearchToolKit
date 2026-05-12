@@ -51,6 +51,7 @@ dependencies = [
     "rich-argparse",
     "rich==14.1.0",
     "scikit-learn",
+    "seaborn>=0.13.2",
     "sentencepiece",
     "tabulate",
     "timm",

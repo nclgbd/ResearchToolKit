@@ -203,9 +203,9 @@ def set_custom_clip_embeddings(
     retrieval_modality: str = kwargs.get("retrieval_modality", args.retrieval_modality)
     embed_column = kwargs.get("embed_column", EMBED_COLUMN)
 
-    if retrieval_modality not in ["image", "text", "full"]:
+    if retrieval_modality not in ["image", "text", "all"]:
         raise ValueError(
-            f"Invalid retrieval_modality: '{retrieval_modality}'. Must be 'image', 'text', or 'full'."
+            f"Invalid retrieval_modality: '{retrieval_modality}'. Must be 'image', 'text', or 'all'."
         )
 
     def process(sample: dict):
@@ -234,7 +234,7 @@ def set_custom_clip_embeddings(
             embeds /= L.vector_norm(embeds, dim=1, keepdim=True)
             sample[embed_column] = embeds
             return sample
-        # concat both image and text embeddings for 'full' modality
+        # concat both image and text embeddings for 'all' modality
         else:
             image_inputs = sample["image_files"]
             text_inputs = sample["reports"]

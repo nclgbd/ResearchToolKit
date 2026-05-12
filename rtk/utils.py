@@ -18,6 +18,31 @@ from hydra import compose, initialize_config_dir
 from hydra.core.global_hydra import GlobalHydra
 
 
+def get_logger(
+    name: str = None,
+    level: int = logging.INFO,
+    console: Console = None,
+) -> Logger:
+    """
+    Function to get a logger with a `RichHandler`. Sets up the logger with a custom format and a `StreamHandler`.
+
+    ## Args:
+    * `name` (`str`): The name of the logger. Defaults to `None`.
+    * `level` (`int`): The level of the logger. Defaults to `logging.INFO`.
+
+    ## Returns:
+    * `logging.Logger`: The logger.
+    """
+
+    logger: Logger = logging.getLogger(name)
+    logger.setLevel(level=level)
+
+    return logger
+
+
+logger = get_logger(__name__)
+
+
 def setup_torch_backends():
     """
     Configure PyTorch backends for optimal performance on Blackwell GPUs.
@@ -77,31 +102,6 @@ def get_console(**kwargs) -> Console:
 
     """
     return Console(record=True, **kwargs)
-
-
-def get_logger(
-    name: str = None,
-    level: int = logging.INFO,
-    console: Console = None,
-) -> Logger:
-    """
-    Function to get a logger with a `RichHandler`. Sets up the logger with a custom format and a `StreamHandler`.
-
-    ## Args:
-    * `name` (`str`): The name of the logger. Defaults to `None`.
-    * `level` (`int`): The level of the logger. Defaults to `logging.INFO`.
-
-    ## Returns:
-    * `logging.Logger`: The logger.
-    """
-
-    logger: Logger = logging.getLogger(name)
-    logger.setLevel(level=level)
-
-    return logger
-
-
-logger = get_logger(__name__)
 
 
 def set_hydra_configuration(

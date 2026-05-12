@@ -16,15 +16,21 @@ def prepare_layout():
             "axes.linewidth": 1.0,
             "axes.spines.right": False,
             "axes.spines.top": False,
-            "axes.titlesize": 21,
+            "axes.titlesize": 12,
             "figure.dpi": 300,
             "font.family": "serif",
-            "font.size": 20,
+            "font.size": 12,
             "legend.fontsize": 12,
             "xtick.labelsize": 12,
             "ytick.labelsize": 12,
         }
     )
+    # plt.rcParams["text.color"] = "black"
+    # plt.rcParams["axes.labelcolor"] = "black"
+    # plt.rcParams["xtick.color"] = "black"
+    # plt.rcParams["ytick.color"] = "black"
+    # plt.rcParams["axes.edgecolor"] = "black"
+
 
 
 metrics = ["recall_p", "precision_p", "f1_p", "mrr_p"]

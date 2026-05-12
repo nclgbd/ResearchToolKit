@@ -67,7 +67,7 @@ class ExperimentCollection:
                 positive_class,
             )
         else:
-            lambda_value = "0.3"  # str(eval(params.get("sinkhorn", {}).get("lmb", "0.3")))
+            lambda_value = str(eval(params.get("lambda", "0.0")))
 
             dst_path = os.path.join(
                 cache_dir,
@@ -119,6 +119,13 @@ class ExperimentCollection:
                 self.artifacts[run_id]["predictions"] = pred_jsonl.set_index("dicom_id")
 
         return self.artifacts
+
+    def refresh(self):
+        self.run_data = {run_id: mlflow.get_run(run_id).data for run_id in self.run_ids}
+        self.artifacts = {
+            run_id: {"report": None, "predictions": None} for run_id in self.run_data.keys()
+        }
+        self.artifacts = self._gather_artifacts()
 
 
 def create_experiment_collection(run_ids: list, name: str = "") -> ExperimentCollection:

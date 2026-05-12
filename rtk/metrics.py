@@ -49,12 +49,10 @@ from tabulate import tabulate
 from textwrap import dedent
 from typing import Dict, List, Optional, Tuple, Union
 
-
 # metrics
 from irmetrics import topk
 from sklearn.metrics import classification_report, confusion_matrix
 from spacy.util import logger
-
 
 # huggingface
 from transformers import TrainerState
@@ -176,6 +174,38 @@ def retrieval_prec_at_k(
         return (sum(1 for l in top_k if l == 1) / k, None)
     else:
         return (None, sum(1 for l in top_k if l == 0) / k)
+
+
+def retrieval_recall_at_k(
+    y_true: int,
+    retrieved_labels: list,
+    k: int,
+) -> Tuple[Optional[float], Optional[float]]:
+    """
+    Retrieval recall at k for a single query.
+
+    Asks: "Of all same-label items in the retrieved list, what fraction
+    appear in the top-k?"
+
+    NOTE: This is NOT classification sens/spec. It measures coverage of
+    relevant items within the ranked list, not whether a classifier
+    predicted the correct label.
+
+    Args:
+        y_true: Ground truth label of the query (0 or 1).
+        retrieved_labels: Ordered labels of retrieved candidates.
+        k: Number of top results to consider.
+
+    Returns:
+        (recall_positive, recall_negative) — one will be None.
+    """
+    top_k = retrieved_labels[:k]
+    if y_true == 1:
+        total = sum(1 for l in retrieved_labels if l == 1)
+        return (_safe_div(sum(1 for l in top_k if l == 1), total), None)
+    else:
+        total = sum(1 for l in retrieved_labels if l == 0)
+        return (None, _safe_div(sum(1 for l in top_k if l == 0), total))
 
 
 def retrieval_f1_at_k(
@@ -310,45 +340,50 @@ def classification_scores(
 # =============================================================================
 
 
-def calculate_rrg_metrics(
-    run_id: str,
-    metrics_data: pd.DataFrame,
-    results: dict,
-    k_values: list = K_VALUES,
-    log: bool = False,
-):
-    """
-    Calculate RRG metrics (RadGraph-F1 and RaTEScore) for retrieved reports.
-    """
-    from RaTEScore import RaTEScore
-    from radgraph import F1RadGraph
+# def calculate_rrg_metrics(
+#     run_id: str,
+#     # metrics_data: pd.DataFrame,
+#     results: dict,
+#     k_values: list = K_VALUES,
+#     log: bool = False,
+# ):
+#     """
+#     Calculate RRG metrics (RadGraph-F1 and RaTEScore) for retrieved reports.
+#     """
+#     from RaTEScore import RaTEScore
+#     from radgraph import F1RadGraph
 
-    f1radgraph = F1RadGraph(model_type="modern-radgraph-xl", reward_level="all")
-    ratescore = RaTEScore()
+#     f1radgraph = F1RadGraph(model_type="modern-radgraph-xl", reward_level="all")
+#     ratescore = RaTEScore()
 
-    all_rate_scores = []
-    all_radgraph_scores = []
-    for _, data in track(results.items(), description="Computing RRG metrics", total=len(results)):
-        candidates = data["retrieved_reports"]
-        references = [data["reports"]] * len(candidates)
-        cands = [extract_sections(c)["cleaned_report"] for c in candidates]
-        refs = [extract_sections(r)["cleaned_report"] for r in references]
-        mean_reward, _, _, _ = f1radgraph(hyps=cands, refs=refs)
+#     all_rate_scores = []
+#     all_radgraph_scores = []
+#     metrics_data = {run_id: {k: {} for k in k_values}}
+#     for _, data in track(results.items(), description="Computing RRG metrics", total=len(results)):
+#         candidates = data["retrieved_reports"]
+#         references = [data["reports"]] * len(candidates)
+#         cands = [extract_sections(c)["cleaned_report"] for c in candidates]
+#         refs = [extract_sections(r)["cleaned_report"] for r in references]
+#         mean_reward, _, _, _ = f1radgraph(hyps=cands, refs=refs)
 
-        _, rg_er, _ = mean_reward
-        all_rate_scores.append(ratescore.compute_score(cands, refs))
-        all_radgraph_scores.append(rg_er)
+#         _, rg_er, _ = mean_reward
+#         rscore = ratescore.compute_score(cands, refs)
+#         all_rate_scores.append(rscore)
+#         all_radgraph_scores.append(rg_er)
 
-    # TODO: fix later if wrong (likely)
-    for k in k_values:
-        mean_rate = float(np.mean([np.mean(scores[:k]) for scores in all_rate_scores]))
-        metrics_data[run_id][k]["rate"] = round(mean_rate, 4)
-        if log:
-            MLflow.log_metrics({"rate": metrics_data[run_id][k]["rate"]}, step=k)
-        mean_radgraph = float(np.mean([np.mean(scores[:k]) for scores in all_radgraph_scores]))
-        metrics_data[run_id][k]["radgraph"] = round(mean_radgraph, 4)
-        if log:
-            MLflow.log_metrics({"radgraph": metrics_data[run_id][k]["radgraph"]}, step=k)
+#     # TODO: fix later if wrong (likely)
+#     for k in k_values:
+#         mean_rate = float(np.mean([np.mean(scores[:k]) for scores in all_rate_scores]))
+#         metrics_data[run_id][k]["rate"] = round(mean_rate, 4)
+#         if log:
+#             MLflow.log_metrics({"rate": metrics_data[run_id][k]["rate"]}, step=k, run_id=run_id)
+#         mean_radgraph = float(np.mean([np.mean(scores[:k]) for scores in all_radgraph_scores]))
+#         metrics_data[run_id][k]["radgraph"] = round(mean_radgraph, 4)
+#         if log:
+#             MLflow.log_metrics(
+#                 {"radgraph": metrics_data[run_id][k]["radgraph"]}, step=k, run_id=run_id
+#             )
+#     return metrics_data
 
 
 # =============================================================================
@@ -408,6 +443,7 @@ def generate_retrieval_report(
         hits_p, hits_n = [], []
         precs_p, precs_n = [], []
         f1s_p, f1s_n = [], []
+        recs_p, recs_n = [], []
 
         for _, data in results.items():
             y_true = data["y_true"]
@@ -416,6 +452,7 @@ def generate_retrieval_report(
             hp, hn = retrieval_hit_at_k(y_true, retrieved_labels, k)
             pp, pn = retrieval_prec_at_k(y_true, retrieved_labels, k)
             fp, fn = retrieval_f1_at_k(y_true, retrieved_labels, k)
+            rp, rn = retrieval_recall_at_k(y_true, retrieved_labels, k)
 
             if hp is not None:
                 hits_p.append(hp)
@@ -429,6 +466,10 @@ def generate_retrieval_report(
                 f1s_p.append(fp)
             if fn is not None:
                 f1s_n.append(fn)
+            if rp is not None:
+                recs_p.append(rp)
+            if rn is not None:
+                recs_n.append(rn)
 
         mean_hit_p = np.mean(hits_p) if hits_p else 0.0
         mean_hit_n = np.mean(hits_n) if hits_n else 0.0
@@ -436,12 +477,17 @@ def generate_retrieval_report(
         mean_prec_n = np.mean(precs_n) if precs_n else 0.0
         mean_f1_p = np.mean(f1s_p) if f1s_p else 0.0
         mean_f1_n = np.mean(f1s_n) if f1s_n else 0.0
+        mean_rec_p = np.mean(recs_p) if recs_p else 0.0
+        mean_rec_n = np.mean(recs_n) if recs_n else 0.0
 
         k_metric.update(
             {
                 "hit": round(float((mean_hit_p + mean_hit_n) / 2), 4),
                 "hit_p": round(float(mean_hit_p), 4),
                 "hit_n": round(float(mean_hit_n), 4),
+                "rec": round(float((mean_rec_p + mean_rec_n) / 2), 4),
+                "rec_p": round(float(mean_rec_p), 4),
+                "rec_n": round(float(mean_rec_n), 4),
                 "prec": round(float((mean_prec_p + mean_prec_n) / 2), 4),
                 "prec_p": round(float(mean_prec_p), 4),
                 "prec_n": round(float(mean_prec_n), 4),

@@ -65,10 +65,12 @@ class Encoder:
         device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
         **kwargs,
     ):
-        self.args = args
-        self.model_name: str = kwargs.get("model_name", args.get("model_name"))
-        self.data_dir: str = kwargs.get("data_dir", args.get("data_dir", os.getenv("DATA_DIR")))
-        self.model_args: dict = args.models
+        self.args = {} if args is None else args
+        self.model_name: str = kwargs.get("model_name", self.args.get("model_name", ""))
+        self.data_dir: str = kwargs.get(
+            "data_dir", self.args.get("data_dir", os.getenv("DATA_DIR"))
+        )
+        self.model_args: dict = {} if args is None else self.args.models
         self.tokenizer = tokenizer
         self.processor = processor
         self.model = model
@@ -202,16 +204,16 @@ class Encoder:
             return image_embeddings, text_embeddings
 
 
-def _create_radir_model(args: DictConfig, **kwargs):
+def _create_radir_model(args: DictConfig = None, **kwargs):
     from radir import RADIR
     from transformer_maskgit import CTViT
     from transformers import BertTokenizer, BertModel
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    model_args: dict = args.models
-    model_id: str = model_args["model_id"]
-    checkpoint_path: str = model_args["checkpoint_path"]
+    model_args: dict = {} if args is None else args.models
+    model_id: str = "microsoft/BiomedVLP-CXR-BERT-specialized"
+    checkpoint_path: str = "/data/nicoleg/workspaces/RadIR/models/RadIR.pt"
     tokenizer = BertTokenizer.from_pretrained(model_id, do_lower_case=True)
     text_encoder = BertModel.from_pretrained(model_id)
     text_encoder = text_encoder.to(device)
@@ -244,14 +246,14 @@ def _create_radir_model(args: DictConfig, **kwargs):
     Rad_IR.load(checkpoint_path)
     Rad_IR.eval()
 
-    encoder = Encoder(args, Rad_IR, tokenizer=tokenizer)
+    encoder = Encoder(args, Rad_IR, model_name="radir", tokenizer=tokenizer)
     return encoder
 
 
-def _create_medclip_model(args: DictConfig, **kwargs):
+def _create_medclip_model(args: DictConfig = None, **kwargs):
     from medclip import MedCLIPModel, MedCLIPProcessor
 
-    model_name: str = args.model_name
+    model_name: str = "" if args is None else args.model_name
     if model_name == "medclip-resnet":
         from medclip import MedCLIPVisionModel
 
@@ -268,8 +270,8 @@ def _create_medclip_model(args: DictConfig, **kwargs):
     return encoder
 
 
-def _create_open_clip_model(args: DictConfig, **kwargs):
-    model_args: dict = args.models
+def _create_open_clip_model(args: DictConfig = None, **kwargs):
+    model_args: dict = {} if args is None else args.models
     model_path: str = model_args["model_id"]
     pretrained: bool = model_args.get("pretrained", None)
     if pretrained:
@@ -290,10 +292,10 @@ def _create_open_clip_model(args: DictConfig, **kwargs):
     return encoder
 
 
-def _create_siglip_model(args: DictConfig, **kwargs):
+def _create_siglip_model(args: DictConfig = None, **kwargs):
     from transformers import SiglipProcessor
 
-    model_args: dict = args.models
+    model_args: dict = {} if args is None else args.models
     model_id: str = model_args["model_id"]
     model: SiglipModel = SiglipModel.from_pretrained(model_id, device_map="cuda")
     processor: SiglipProcessor = SiglipProcessor.from_pretrained(model_id)
@@ -303,8 +305,8 @@ def _create_siglip_model(args: DictConfig, **kwargs):
     return encoder
 
 
-def create_retrieval_model(args: DictConfig, **kwargs) -> Encoder:
-    model_args: dict = args.models
+def create_retrieval_model(args: DictConfig = None, **kwargs) -> Encoder:
+    model_args: dict = {} if args is None else args.models
     model_name: str = kwargs.get("model_name", model_args.get("name", ""))
 
     if "biomed" in model_name:
