@@ -9,6 +9,7 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
 
 # torch imports
+from open_clip import tokenizer
 import torch
 import torch.distributed as dist
 import torch.nn as nn
@@ -22,6 +23,7 @@ from transformers import (
     PreTrainedModel,
     ProcessorMixin,
     SiglipModel,
+    SiglipProcessor,
     logging,
 )
 
@@ -75,10 +77,11 @@ class Encoder:
         self.processor = processor
         self.model = model
         self.device = device
+        self.image_transform = kwargs.get("image_transform", None)
         logger.debug(f"Initialized Encoder with model: '{self.model_name}'")
 
     @torch.no_grad()
-    def encode_text(self, text):
+    def encode_text(self, text, **kwargs):
         if not isinstance(text, list):
             text = [text]
         if "siglip" in self.model_name:
@@ -89,6 +92,23 @@ class Encoder:
                 return_tensors="pt",
             ).to("cuda")
             embeddings = self.model.get_text_features(**inputs)
+            return embeddings
+
+        if "chexficient" in self.model_name:
+            max_length: int = kwargs.get("max_length", self.model_args.get("max_bert_length", 256))
+            inputs = self.tokenizer(
+                text,
+                padding="longest",
+                truncation=True,
+                max_length=max_length,
+                return_tensors="pt",
+            )
+
+            for key in inputs:
+                inputs[key] = inputs[key].to(
+                    next(self.model.parameters()).device, non_blocking=True
+                )
+            embeddings = self.model.encode_text(inputs)
             return embeddings
 
         if "biomed" in self.model_name:
@@ -126,6 +146,14 @@ class Encoder:
             embeddings: torch.Tensor = self.model.get_image_features(**inputs)
             return embeddings
 
+        if "chexficient" in self.model_name:
+            images = [
+                Image.open(os.path.join(self.data_dir, p)).convert("RGB") for p in image_paths
+            ]
+            inputs = torch.stack([self.image_transform(im) for im in images]).to("cuda")
+            embeddings: torch.Tensor = self.model.encode_image(inputs)
+            return embeddings
+
         if "medclip" in self.model_name:
             images = [Image.open(os.path.join(self.data_dir, p)) for p in image_paths]
             inputs = self.processor(
@@ -146,6 +174,11 @@ class Encoder:
             return image_embeddings, text_embeddings
 
         if "siglip" in self.model_name:
+            image_embeddings = self.encode_images(image_paths)
+            text_embeddings = self.encode_text(text)
+            return image_embeddings, text_embeddings
+
+        if "chexficient" in self.model_name:
             image_embeddings = self.encode_images(image_paths)
             text_embeddings = self.encode_text(text)
             return image_embeddings, text_embeddings
@@ -202,6 +235,38 @@ class Encoder:
             )
 
             return image_embeddings, text_embeddings
+
+
+def _create_chexficient_model(args: DictConfig = None, **kwargs):
+    import torchvision.transforms as transforms
+    from chexficient import CheXficient
+
+    image_size = kwargs.get("image_size", args.models.get("image_size", 224))
+    model: torch.nn.Module = CheXficient(image_size=image_size)
+    model.to(torch.device("cuda"))
+    tokenizer = model.text_encoder.tokenizer
+    image_transform = transforms.Compose(
+        [
+            transforms.Resize(image_size, interpolation=Image.BICUBIC),
+            transforms.CenterCrop(image_size),
+            transforms.ToTensor(),
+            transforms.Normalize(
+                mean=[0.48145466, 0.4578275, 0.40821073], std=[0.26862954, 0.26130258, 0.27577711]
+            ),
+        ]
+    )
+
+    weights_path = f"{DEFAULT_MODEL_PATH}/{args.models.name}/pytorch_model.pth"
+    state_dict = torch.load(
+        weights_path,
+        map_location="cpu",
+        weights_only=False,
+    )["model"]
+    _ = model.load_state_dict(state_dict, strict=False)
+    model.eval()
+    encoder = Encoder(args, model, tokenizer=tokenizer, image_transform=image_transform)
+
+    return encoder
 
 
 def _create_radir_model(args: DictConfig = None, **kwargs):
@@ -317,6 +382,8 @@ def create_retrieval_model(args: DictConfig = None, **kwargs) -> Encoder:
         return _create_siglip_model(args, **kwargs)
     if "radir" in model_name:
         return _create_radir_model(args, **kwargs)
+    if "chexficient" in model_name:
+        return _create_chexficient_model(args, **kwargs)
 
 
 def print_trainable_parameters(model: nn.Module):

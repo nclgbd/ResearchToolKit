@@ -77,6 +77,7 @@ dev = [
 monai = ["monai", "nibabel", "pydicom", "itk"]
 qwen = ["bitsandbytes", "qwen-vl-utils"]
 radir = ["radir", "transformer-maskgit"]
+chexficient = ["chexficient"]
 
 [project.scripts]
 check-cuda = "scripts.check_cuda:main"
@@ -85,6 +86,7 @@ check-cuda = "scripts.check_cuda:main"
 radgraph = { git = "https://github.com/Stanford-AIMI/radgraph" }
 rtk = { path = "../ResearchToolKit", editable = true }
 radir = { path = "../RadIR/Rad_IR", editable = true }
+chexficient = { path = "../CheXficient", editable = true }
 transformer-maskgit = { path = "../RadIR/transformer_maskgit", editable = true }
 torch = { index = "pytorch-cu128" }
 torchvision = { index = "pytorch-cu128" }
