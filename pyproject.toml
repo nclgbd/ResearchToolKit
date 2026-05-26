@@ -23,35 +23,33 @@ classifiers = [
 dependencies = [
     "accelerate",
     "albumentations",
-    "datasets",
+    "datasets>=2.18.0,<3.0.0",
     "einops",
     "faiss-gpu-cu12",
-    "hi-ml-multimodal>=0.2.2",
+    "hi-ml-multimodal",
     "huggingface-hub",
     "hydra-colorlog",
     "hydra-core",
-    "ipykernel>=7.2.0",
+    "ipykernel",
     "ir-metrics",
     "jsonlines",
-    "jupyter>=1.1.1",
+    "jupyter",
     "langfuse",
     "matplotlib",
-    "medclip>=0.0.3",
-    "medspacy>=1.3.1",
+    "medclip",
+    "medspacy",
     "mlflow==3.2.0",
-    "nibabel>=5.4.2",
+    "nibabel",
     "numpy==1.26.*",
     "omegaconf",
     "open_clip_torch",
-    "openpyxl>=3.1.5",
-    "pyarrow<21.0.0",
+    "openpyxl",
+    "pyarrow",
     "python-dotenv",
-    "radgraph",
-    "ratescore>=0.6.0",
     "rich-argparse",
     "rich==14.1.0",
     "scikit-learn",
-    "seaborn>=0.13.2",
+    "seaborn",
     "sentencepiece",
     "tabulate",
     "timm",
@@ -78,6 +76,7 @@ monai = ["monai", "nibabel", "pydicom", "itk"]
 qwen = ["bitsandbytes", "qwen-vl-utils"]
 radir = ["radir", "transformer-maskgit"]
 chexficient = ["chexficient"]
+rrg = ["radgraph", "ratescore"]
 
 [project.scripts]
 check-cuda = "scripts.check_cuda:main"
@@ -90,8 +89,6 @@ chexficient = { path = "../CheXficient", editable = true }
 transformer-maskgit = { path = "../RadIR/transformer_maskgit", editable = true }
 torch = { index = "pytorch-cu128" }
 torchvision = { index = "pytorch-cu128" }
-# Add any local or git dependencies here
-# Example: mypackage = { path = "../mypackage" }
 
 [[tool.uv.index]]
 name = "pytorch-cu128"
