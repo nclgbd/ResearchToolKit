@@ -38,7 +38,7 @@ dependencies = [
     "matplotlib",
     "medclip",
     "medspacy",
-    "mlflow==3.2.0",
+    "mlflow>=3.4.0,<3.15",
     "nibabel",
     "numpy==1.26.*",
     "omegaconf",

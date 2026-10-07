@@ -37,6 +37,45 @@ MLFLOW_TRACKING_URI=http://<host>:5000
 `mlflow.enabled=false` (or don't set `MLFLOW_TRACKING_URI`/don't run this
 server at all) to fall back to the fully offline, Hydra-only pipeline.
 
+## Version pinning and upgrades
+
+The server image is pinned to an exact MLflow version in `Dockerfile`, and the
+client is pinned to a compatible range in the top-level `pyproject.toml`
+(`mlflow>=3.4.0,<3.15`). Keep those two in step, and prefer client <= server.
+
+The `>=3.4.0` floor is not cosmetic. MLflow's `BaseMlflowSpanProcessor.__init__`
+did not call `super().__init__()` before 3.4.0, while opentelemetry-sdk >= 1.44
+moved span-processor state (`_metrics`, and `_shutdown` before it) into that
+parent constructor and reads it in `on_end`. Since MLflow only constrains
+`opentelemetry-sdk<3,>=1.9.0`, a fresh resolve picks up a new otel-sdk and every
+span end then logs:
+
+```
+WARNING mlflow.entities.span: Failed to end span <id>:
+  'MlflowV3SpanProcessor' object has no attribute '_metrics'.
+```
+
+Spans are still exported (the exporter runs before the failing line), but the
+exception skips OpenTelemetry's `detach(token)`, leaking trace context on every
+span. 3.4.0 added the `super().__init__()` call and fixes it.
+
+### Does a version bump need `mlflow db upgrade`?
+
+Bumping the **client** does not. The server owns the Postgres schema; clients
+only speak HTTP to it and never connect to Postgres.
+
+Bumping the **server** image may. Back up `./data/postgres` first, then let the
+new container start and check its logs — `mlflow server` reports when the schema
+is behind, and the migration is:
+
+```bash
+docker compose run --rm --entrypoint mlflow mlflow \
+  db upgrade "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+```
+
+Schema migrations are one-way: downgrading the server image after one has run is
+not supported, so the Postgres backup is the only way back.
+
 ## Notes / future hardening
 
 - No authentication is configured — anyone with network access to the port
