@@ -22,20 +22,20 @@ Data persists in `./data/postgres` (run metadata) and `./data/artifacts`
 (PNGs, models, summaries) on the host, per the paths in `.env`. Back these up
 like you would any other durable dataset — losing them loses run history.
 
-## Point `classify.py` at it
+## Point clients at it
 
-Set `MLFLOW_TRACKING_URI` in `drish/.env` (or export it in your shell) to the
-server's URL:
+Set `MLFLOW_TRACKING_URI` to the server's URL in the consuming project's `.env`
+(or export it in your shell):
 
 ```
 MLFLOW_TRACKING_URI=http://<host>:5000
 ```
 
-`pipelines/classify.py` reads this via `${oc.env:MLFLOW_TRACKING_URI,...}` in
-`pipelines/configs/classify.yaml` — see that file's `mlflow` block, and
-`pipelines/configs/README.md` for the full option reference. Set
-`mlflow.enabled=false` (or don't set `MLFLOW_TRACKING_URI`/don't run this
-server at all) to fall back to the fully offline, Hydra-only pipeline.
+`rtk/mlflow.py` reads this with `os.getenv` at import time, defaulting to
+`http://localhost:5000` if it is unset — so `load_dotenv()` has to run before
+you import anything that pulls in `rtk.mlflow`. Pointing the variable at a
+server that is not running will surface as connection errors on the first
+logging call, not at import.
 
 ## Version pinning and upgrades
 
