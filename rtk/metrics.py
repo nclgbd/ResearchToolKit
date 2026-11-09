@@ -589,6 +589,9 @@ def generate_retrieval_report(
         precs_p, precs_n = [], []
         f1s_p, f1s_n = [], []
         recs_p, recs_n = [], []
+        # nDCG was previously computed only offline, so the runs logged every other
+        # retrieval metric but not this one and the MLflow UI could not show it.
+        ndcgs_p, ndcgs_n = [], []
 
         for _, data in results.items():
             y_true = data["y_true"]
@@ -598,7 +601,12 @@ def generate_retrieval_report(
             pp, pn = retrieval_prec_at_k(y_true, retrieved_labels, k)
             fp, fn = retrieval_f1_at_k(y_true, retrieved_labels, k)
             rp, rn = retrieval_recall_at_k(y_true, retrieved_labels, k)
+            np_, nn = retrieval_ndcg_at_k(y_true, retrieved_labels, k)
 
+            if np_ is not None:
+                ndcgs_p.append(np_)
+            if nn is not None:
+                ndcgs_n.append(nn)
             if hp is not None:
                 hits_p.append(hp)
             if hn is not None:
@@ -624,6 +632,8 @@ def generate_retrieval_report(
         mean_f1_n = np.mean(f1s_n) if f1s_n else 0.0
         mean_rec_p = np.mean(recs_p) if recs_p else 0.0
         mean_rec_n = np.mean(recs_n) if recs_n else 0.0
+        mean_ndcg_p = np.mean(ndcgs_p) if ndcgs_p else 0.0
+        mean_ndcg_n = np.mean(ndcgs_n) if ndcgs_n else 0.0
 
         k_metric.update(
             {
@@ -639,6 +649,13 @@ def generate_retrieval_report(
                 "f1": round(float((mean_f1_p + mean_f1_n) / 2), 4),
                 "f1_p": round(float(mean_f1_p), 4),
                 "f1_n": round(float(mean_f1_n), 4),
+                # Macro is the mean of the two class means here, matching every other
+                # row above. calculate_rrg_metrics returns a plain mean over queries
+                # under the same name, which is a different quantity: the two differ by
+                # more than 0.1 at k=1. Table generators must not mix them.
+                "ndcg": round(float((mean_ndcg_p + mean_ndcg_n) / 2), 4),
+                "ndcg_p": round(float(mean_ndcg_p), 4),
+                "ndcg_n": round(float(mean_ndcg_n), 4),
             }
         )
 
