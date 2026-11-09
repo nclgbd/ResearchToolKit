@@ -237,6 +237,75 @@ def retrieval_f1_at_k(
     return (_hm(hit_p, prec_p), _hm(hit_n, prec_n))
 
 
+def retrieval_ndcg_at_k(
+    y_true: int,
+    retrieved_labels: list,
+    k: int,
+) -> Tuple[Optional[float], Optional[float]]:
+    """
+    Normalised Discounted Cumulative Gain at k for a single query, binary relevance.
+
+    A retrieved case is relevant when its label matches the query's, scoring a gain of
+    1; the gain is discounted by ``1 / log2(rank + 1)``.  Unlike Recall@k and
+    Precision@k, this rewards placing the relevant cases *early* within the cut-off, so
+    it measures what the re-ranking stage actually changes.
+
+    The ideal ranking is taken to be k relevant cases, giving
+    ``IDCG@k = sum_{i=1..k} 1 / log2(i + 1)``.  This is the right convention here
+    because the corpus holds far more same-label cases than any k we report, so a
+    perfect retriever could fill the whole top-k.  Note that nDCG definitions differ on
+    this point, and the choice changes the numbers.
+
+    Args:
+        y_true: Ground truth label of the query (0 or 1).
+        retrieved_labels: Ordered labels of retrieved candidates.
+        k: Number of top results to consider.
+
+    Returns:
+        (ndcg_positive, ndcg_negative) — one will be None, matching the convention of
+        the other ``retrieval_*_at_k`` functions.
+    """
+    gains = [1.0 if label == y_true else 0.0 for label in retrieved_labels[:k]]
+    score = retrieval_graded_ndcg_at_k(gains, k, ideal_gain=1.0)
+    return (score, None) if y_true == 1 else (None, score)
+
+
+def retrieval_graded_ndcg_at_k(
+    gains: List[float],
+    k: int,
+    ideal_gain: Optional[float] = None,
+) -> float:
+    """
+    Normalised Discounted Cumulative Gain at k for graded relevance.
+
+    Takes a relevance *score* per retrieved position rather than a binary label — in
+    this project, the RadGraph-F1 or RaTEScore similarity between the query's report and
+    the retrieved case's report.  That answers the objection that same-label retrieval
+    treats two clinically very different cases as equally relevant.
+
+    Args:
+        gains: Relevance scores of the retrieved candidates, in rank order.
+        k: Number of top results to consider.
+        ideal_gain: Gain of a perfect result at every rank.  Leave as ``None`` to
+            normalise by the best ordering *of these same gains*, which isolates ranking
+            quality from how similar the candidates happen to be.  Pass a constant (1.0
+            for binary relevance) to normalise against a perfect result instead.
+
+    Returns:
+        nDCG@k in [0, 1]; 0.0 when the ideal ranking has no gain to give.
+    """
+    top = [float(g) for g in gains[:k]]
+    discounts = [1.0 / math.log2(rank + 2) for rank in range(k)]
+
+    dcg = sum(g * d for g, d in zip(top, discounts))
+    if ideal_gain is None:
+        ideal = sorted(top, reverse=True)
+    else:
+        ideal = [float(ideal_gain)] * min(k, len(discounts))
+    idcg = sum(g * d for g, d in zip(ideal, discounts))
+    return _safe_div(dcg, idcg)
+
+
 # =============================================================================
 # 2. CLASSIFICATION METRICS
 #    Operate on (y_true_array, y_pred_array) — no ranked lists.
@@ -340,50 +409,126 @@ def classification_scores(
 # =============================================================================
 
 
-# def calculate_rrg_metrics(
-#     run_id: str,
-#     # metrics_data: pd.DataFrame,
-#     results: dict,
-#     k_values: list = K_VALUES,
-#     log: bool = False,
-# ):
-#     """
-#     Calculate RRG metrics (RadGraph-F1 and RaTEScore) for retrieved reports.
-#     """
-#     from RaTEScore import RaTEScore
-#     from radgraph import F1RadGraph
+def retrieval_metrics_from_results(
+    results,
+    similarity=None,
+    k_values: list = None,
+) -> Dict[str, float]:
+    """
+    Per-query retrieval metrics for one run, computed from its persisted results.
 
-#     f1radgraph = F1RadGraph(model_type="modern-radgraph-xl", reward_level="all")
-#     ratescore = RaTEScore()
+    Takes what a run already wrote to ``*_retrieval_results.jsonl`` — the query's
+    ``dicom_id``, its ``y_true``, the rank-ordered ``retrieved_labels`` and the
+    rank-ordered ``retrieved_reports`` — and returns the metrics keyed ``<name>@<k>``,
+    macro-averaged over queries and split into ``_p``/``_n`` by the query's label.
 
-#     all_rate_scores = []
-#     all_radgraph_scores = []
-#     metrics_data = {run_id: {k: {} for k in k_values}}
-#     for _, data in track(results.items(), description="Computing RRG metrics", total=len(results)):
-#         candidates = data["retrieved_reports"]
-#         references = [data["reports"]] * len(candidates)
-#         cands = [extract_sections(c)["cleaned_report"] for c in candidates]
-#         refs = [extract_sections(r)["cleaned_report"] for r in references]
-#         mean_reward, _, _, _ = f1radgraph(hyps=cands, refs=refs)
+    Two families are produced:
 
-#         _, rg_er, _ = mean_reward
-#         rscore = ratescore.compute_score(cands, refs)
-#         all_rate_scores.append(rscore)
-#         all_radgraph_scores.append(rg_er)
+    * ``ndcg`` — label-based, the ranking-sensitive companion to Recall@k and
+      Precision@k that the existing report lacks.
+    * ``radgraph``, ``rate`` and the graded ``ndcg_rg``, ``ndcg_rate`` — clinical
+      similarity between the query's report and each retrieved report, which does not
+      depend on pathology labels at all. These need ``similarity``; without it only the
+      label-based metrics are returned, so a run with no cached matrices still scores.
 
-#     # TODO: fix later if wrong (likely)
-#     for k in k_values:
-#         mean_rate = float(np.mean([np.mean(scores[:k]) for scores in all_rate_scores]))
-#         metrics_data[run_id][k]["rate"] = round(mean_rate, 4)
-#         if log:
-#             MLflow.log_metrics({"rate": metrics_data[run_id][k]["rate"]}, step=k, run_id=run_id)
-#         mean_radgraph = float(np.mean([np.mean(scores[:k]) for scores in all_radgraph_scores]))
-#         metrics_data[run_id][k]["radgraph"] = round(mean_radgraph, 4)
-#         if log:
-#             MLflow.log_metrics(
-#                 {"radgraph": metrics_data[run_id][k]["radgraph"]}, step=k, run_id=run_id
-#             )
-#     return metrics_data
+    The graded nDCGs are normalised against an *oracle* ranking: the k most clinically
+    similar studies in the corpus, excluding the query itself. Normalising against the
+    retrieved gains instead would make nDCG@1 trivially 1.0 for every run.
+
+    Args:
+        results: Iterable of per-query dicts, or a DataFrame indexed by ``dicom_id``.
+        similarity: A ``rtk.rrg.ReportSimilarity``, or None to skip clinical metrics.
+        k_values: Cut-offs to report. Defaults to ``K_VALUES``.
+
+    Returns:
+        Dict of ``{"<metric>@<k>": value}``.
+    """
+    k_values = list(k_values or K_VALUES)
+    records = _as_records(results)
+
+    buckets: Dict[str, List[float]] = {}
+
+    def add(name: str, k: int, value: Optional[float], y_true: int) -> None:
+        if value is None:
+            return
+        buckets.setdefault(f"{name}@{k}", []).append(value)
+        suffix = "_p" if y_true == 1 else "_n"
+        buckets.setdefault(f"{name}{suffix}@{k}", []).append(value)
+
+    missing_queries = 0
+    missing_candidates = 0
+
+    for record in records:
+        y_true = int(record["y_true"])
+        labels = list(record.get("retrieved_labels") or [])
+
+        for k in k_values:
+            pos, neg = retrieval_ndcg_at_k(y_true, labels, k)
+            add("ndcg", k, pos if pos is not None else neg, y_true)
+
+        if similarity is None:
+            continue
+
+        query_idx = similarity.index_of_dicom(record["dicom_id"])
+        if query_idx is None:
+            missing_queries += 1
+            continue
+
+        reports = list(record.get("retrieved_reports") or [])
+        if not reports:
+            continue
+
+        candidate_idx = [similarity.index_of_raw(report) for report in reports]
+        if any(idx is None for idx in candidate_idx):
+            missing_candidates += 1
+            continue
+
+        gains = {
+            "radgraph": [
+                float(similarity.radgraph_f1[query_idx, idx]) for idx in candidate_idx
+            ],
+            "rate": [float(similarity.ratescore[query_idx, idx]) for idx in candidate_idx],
+        }
+        for metric, values in gains.items():
+            graded_name = "ndcg_rg" if metric == "radgraph" else "ndcg_rate"
+            for k in k_values:
+                top = values[:k]
+                add(metric, k, float(np.mean(top)) if top else None, y_true)
+                ideal = similarity.ideal_gains(metric, record["dicom_id"], k)
+                add(graded_name, k, _graded_ndcg_vs_ideal(values, ideal, k), y_true)
+
+    if missing_queries or missing_candidates:
+        logger.warning(
+            "RRG metrics skipped %d queries with an unknown dicom_id and %d queries with "
+            "an unrecognised retrieved report",
+            missing_queries,
+            missing_candidates,
+        )
+
+    return {name: round(float(np.mean(values)), 4) for name, values in buckets.items()}
+
+
+def _graded_ndcg_vs_ideal(gains: List[float], ideal: List[float], k: int) -> float:
+    """Graded nDCG@k of ``gains`` against an externally supplied ideal ranking."""
+    discounts = [1.0 / math.log2(rank + 2) for rank in range(k)]
+    dcg = sum(g * d for g, d in zip(gains[:k], discounts))
+    idcg = sum(g * d for g, d in zip(ideal[:k], discounts))
+    return _safe_div(dcg, idcg)
+
+
+def _as_records(results) -> List[dict]:
+    """Normalise the several shapes a run's results are handed to us in."""
+    if isinstance(results, pd.DataFrame):
+        frame = results.reset_index() if results.index.name == "dicom_id" else results
+        return frame.to_dict("records")
+    if isinstance(results, dict):
+        records = []
+        for key, value in results.items():
+            record = dict(value)
+            record.setdefault("dicom_id", key)
+            records.append(record)
+        return records
+    return [dict(record) for record in results]
 
 
 # =============================================================================
